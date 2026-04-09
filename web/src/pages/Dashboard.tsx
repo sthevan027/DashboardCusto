@@ -7,22 +7,14 @@ import { normalizeStatus } from '../lib/statusLabels'
 import type {
   ActivityRow,
   GroupRow,
-  MonthRow,
   SubgroupRow,
 } from '../lib/dashboardTypes'
-import { DashboardMonthly } from '../components/dashboard/DashboardMonthly'
 import { DashboardSkeleton } from '../components/dashboard/DashboardSkeleton'
 import { DashboardTopSubgroupsChart } from '../components/dashboard/DashboardTopSubgroupsChart'
 import { V } from '../lib/db/catalog'
 
 const CONTRACT_LABEL =
   (import.meta.env.VITE_CONTRACT_LABEL as string | undefined)?.trim() || 'Contrato'
-
-function formatMonthLabel(iso: string): string {
-  const d = new Date(iso + 'T12:00:00')
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })
-}
 
 type GroupSortCol =
   | 'group_name'
@@ -57,7 +49,6 @@ export function Dashboard() {
   const [groups, setGroups] = useState<GroupRow[]>([])
   const [subgroups, setSubgroups] = useState<SubgroupRow[]>([])
   const [activities, setActivities] = useState<ActivityRow[]>([])
-  const [months, setMonths] = useState<MonthRow[]>([])
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadedAt, setLoadedAt] = useState<Date | null>(null)
@@ -79,7 +70,7 @@ export function Dashboard() {
       setErr(null)
       setLoading(true)
       try {
-        const [g, sg, a, m] = await Promise.all([
+        const [g, sg, a] = await Promise.all([
           supabase.from(V.cost_group_summary).select('*').order('group_name'),
           supabase
             .from(V.cost_subgroup_summary)
@@ -87,17 +78,14 @@ export function Dashboard() {
             .order('group_name')
             .order('subgroup_name'),
           supabase.from(V.cost_activity_analysis).select('*'),
-          supabase.from(V.cost_monthly_total_actuals).select('*').order('month'),
         ])
         if (g.error) throw g.error
         if (sg.error) throw sg.error
         if (a.error) throw a.error
-        if (m.error) throw m.error
         if (!ok) return
         setGroups((g.data ?? []) as GroupRow[])
         setSubgroups((sg.data ?? []) as SubgroupRow[])
         setActivities((a.data ?? []) as ActivityRow[])
-        setMonths((m.data ?? []) as MonthRow[])
         setLoadedAt(new Date())
       } catch (e: unknown) {
         if (ok) setErr(getErrorMessage(e))
@@ -144,7 +132,7 @@ export function Dashboard() {
 
   /**
    * KPIs do topo: previsto = contrato (grupo Total na planilha).
-   * Real = quebra MO/EQ/MAT, onde os lançamentos são registrados — alinha com a tabela por grupo e com a evolução mensal.
+   * Real = quebra MO/EQ/MAT, onde os lançamentos são registrados — alinha com a tabela por grupo.
    */
   const totalsKpi = useMemo(() => {
     const planned = totalsContract.planned
@@ -159,12 +147,6 @@ export function Dashboard() {
   }, [totalsContract.planned, totalsPrimary.actual])
 
   const riskItems = useMemo(() => sortActivitiesByRisk(activities).slice(0, 5), [activities])
-
-  /** Baseline da curva = mesmo previsto do contrato (itens do grupo Total). */
-  const monthlyPlannedBaseline = useMemo(() => {
-    if (totalsContract.planned > 0) return totalsContract.planned
-    return totalsPrimary.planned
-  }, [totalsContract.planned, totalsPrimary.planned])
 
   const q = filterQuery.trim().toLowerCase()
 
@@ -273,8 +255,6 @@ export function Dashboard() {
     return { planned: p, actual: a, balance: p - a }
   }, [sortedSubgroups])
 
-  const dataThrough = months.length > 0 ? months[months.length - 1].month : null
-
   const toggleGroupSort = (col: GroupSortCol) => {
     setSortGroup((s) =>
       s.col === col ? { col, asc: !s.asc } : { col, asc: col === 'group_name' }
@@ -325,16 +305,13 @@ export function Dashboard() {
   return (
     <div className="space-y-10">
       <div className="flex flex-col gap-3 border-b border-(--border) pb-6 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+      <div>
           <h1 className="text-2xl font-semibold text-(--text)">
             Visão do contrato — orçado × realizado
           </h1>
         </div>
         <div className="shrink-0 rounded-lg border border-(--border) bg-(--card) px-3 py-2 text-xs text-(--muted)">
           <div className="font-medium text-(--text)">{CONTRACT_LABEL}</div>
-          {dataThrough && (
-            <div className="mt-1">Dados até {formatMonthLabel(dataThrough)}</div>
-          )}
           {loadedAt && (
             <div className="mt-0.5">
               Atualizado em{' '}
@@ -344,8 +321,8 @@ export function Dashboard() {
               })}
             </div>
           )}
-        </div>
-      </div>
+            </div>
+          </div>
 
       <section className="space-y-3">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -360,7 +337,7 @@ export function Dashboard() {
               Total real (lançamentos)
             </div>
             <div className="mt-1 text-xl font-semibold tabular-nums">{formatBRL(totalsKpi.actual)}</div>
-          </div>
+            </div>
           <div className="rounded-xl border border-(--border) bg-(--card) p-4 shadow-sm">
             <div className="text-xs font-medium uppercase tracking-wide text-(--muted)">Saldo</div>
             <div className="mt-1 text-xl font-semibold tabular-nums">{formatBRL(totalsKpi.balance)}</div>
@@ -370,22 +347,11 @@ export function Dashboard() {
             <div className="mt-1 text-xl font-semibold tabular-nums">
               {totalsKpi.pct != null ? `${(totalsKpi.pct * 100).toFixed(2)}%` : '—'}
             </div>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
       <DashboardTopSubgroupsChart subgroups={subgroups} />
-
-      <section>
-        <h2 className="text-lg font-semibold">Evolução mensal</h2>
-        <div className="mt-4 rounded-xl border border-(--border) bg-(--card) p-4 shadow-sm">
-          <DashboardMonthly
-            months={months}
-            totalPlanned={monthlyPlannedBaseline}
-            formatMonthLabel={formatMonthLabel}
-          />
-        </div>
-      </section>
 
       <section className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
@@ -454,7 +420,7 @@ export function Dashboard() {
 
         {detailTab === 'group' ? (
           <div className="max-h-[min(70vh,640px)] overflow-auto rounded-xl border border-(--border) bg-(--card)">
-            <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full min-w-[640px] text-sm">
               <thead className="sticky top-0 z-10 border-b border-(--border) bg-slate-50 dark:bg-slate-800/95">
                 <tr>
                   <th className="px-3 py-2 text-left">
@@ -502,26 +468,26 @@ export function Dashboard() {
                       % {sortGroup.col === 'percent_used' ? (sortGroup.asc ? '↑' : '↓') : ''}
                     </button>
                   </th>
-                </tr>
-              </thead>
-              <tbody>
+              </tr>
+            </thead>
+            <tbody>
                 {sortedGroups.map((r, i) => (
-                  <tr
-                    key={r.group_name}
+                <tr
+                  key={r.group_name}
                     className={`border-b border-(--border) last:border-0 ${
                       i % 2 === 1 ? 'bg-slate-50/50 dark:bg-slate-800/20' : ''
                     }`}
-                  >
+                >
                     <td className="px-3 py-2 font-medium">{r.group_name}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{formatBRL(r.planned_value)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{formatBRL(r.actual_value)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{formatBRL(r.balance)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">
+                  <td className="px-3 py-2 text-right tabular-nums">
                       {r.percent_used != null ? `${(Number(r.percent_used) * 100).toFixed(1)}%` : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
               <tfoot className="sticky bottom-0 z-10 border-t-2 border-(--border) bg-slate-100/95 font-medium dark:bg-slate-900/95">
                 <tr>
                   <td className="px-3 py-2">Total (visível)</td>
@@ -531,11 +497,11 @@ export function Dashboard() {
                   <td className="px-3 py-2 text-right text-(--muted)">—</td>
                 </tr>
               </tfoot>
-            </table>
-          </div>
+          </table>
+        </div>
         ) : (
           <div className="max-h-[min(70vh,640px)] overflow-auto rounded-xl border border-(--border) bg-(--card)">
-            <table className="w-full min-w-[720px] text-sm">
+          <table className="w-full min-w-[720px] text-sm">
               <thead className="sticky top-0 z-10 border-b border-(--border) bg-slate-50 dark:bg-slate-800/95">
                 <tr>
                   <th className="px-3 py-2 text-left">
@@ -592,12 +558,12 @@ export function Dashboard() {
                       % {sortSubgroup.col === 'percent_used' ? (sortSubgroup.asc ? '↑' : '↓') : ''}
                     </button>
                   </th>
-                </tr>
-              </thead>
-              <tbody>
+              </tr>
+            </thead>
+            <tbody>
                 {sortedSubgroups.map((r, i) => (
-                  <tr
-                    key={`${r.group_name}-${r.subgroup_name}`}
+                <tr
+                  key={`${r.group_name}-${r.subgroup_name}`}
                     className={`border-b border-(--border) last:border-0 ${
                       i % 2 === 1 ? 'bg-slate-50/50 dark:bg-slate-800/20' : ''
                     }`}
@@ -609,10 +575,10 @@ export function Dashboard() {
                     <td className="px-3 py-2 text-right tabular-nums align-top">{formatBRL(r.balance)}</td>
                     <td className="px-3 py-2 text-right tabular-nums align-top">
                       {r.percent_used != null ? `${(Number(r.percent_used) * 100).toFixed(1)}%` : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
               <tfoot className="sticky bottom-0 z-10 border-t-2 border-(--border) bg-slate-100/95 font-medium dark:bg-slate-900/95">
                 <tr>
                   <td className="px-3 py-2" colSpan={2}>
@@ -624,7 +590,7 @@ export function Dashboard() {
                   <td className="px-3 py-2 text-right text-(--muted)">—</td>
                 </tr>
               </tfoot>
-            </table>
+          </table>
           </div>
         )}
       </section>
