@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+:root {
+  --app-bg: #f8f9fb;
+  --card: #ffffff;
+  --border: #e2e8f0;
+  --text: #1e293b;
+  --muted: #64748b;
+  --accent: #2563eb;
+  --accent-soft: #eff6ff;
+  --row-orange: #fff7ed;
+  --row-blue: #eff6ff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --app-bg: #0f172a;
+    --card: #1e293b;
+    --border: #334155;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --accent: #60a5fa;
+    --accent-soft: #1e3a5f;
+    --row-orange: #422006;
+    --row-blue: #172554;
+  }
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--app-bg);
+  color: var(--text);
+  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+}
+
+#root {
+  min-height: 100vh;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+input[type="number"],
+input[type="date"],
+input[type="text"],
+select,
+textarea {
+  color: inherit;
+}
