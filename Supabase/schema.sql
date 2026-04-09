@@ -3,8 +3,9 @@
 -- 1. Tables
 -- 2. Indexes
 -- 3. Seed data
--- 4. Views
--- 5. Queries
+-- 4. Views (com security_invoker para RLS)
+-- 5. RLS + grants (tabelas + views no PostgREST)
+-- 6. Queries (exemplos)
 
 -- =========================
 -- 1) TABLES
@@ -260,7 +261,10 @@ after insert or update or delete on public.costs
 for each row
 execute function public.fn_costs_audit();
 
-create or replace view public.vw_cost_analysis as
+-- security_invoker: RLS das tabelas base (items, budgets, costs, groups) vale para quem consulta a view (anon/auth).
+create or replace view public.vw_cost_analysis
+with (security_invoker = true)
+as
 with actuals as (
   select
     c.item_id,
@@ -291,7 +295,9 @@ join public.budgets b on b.item_id = i.id
 left join actuals a on a.item_id = i.id;
 
 -- View agregada por grupo (ótima para cards e tabelas do dashboard)
-create or replace view public.vw_group_cost_summary as
+create or replace view public.vw_group_cost_summary
+with (security_invoker = true)
+as
 with group_totals as (
   select
     v.group_name,
@@ -318,9 +324,46 @@ select
   end as status
 from group_totals gt;
 
+-- Agregado por subgrupo (mesma lógica do “Por grupo”, um nível abaixo)
+create or replace view public.vw_subgroup_cost_summary
+with (security_invoker = true)
+as
+with sub_totals as (
+  select
+    g.name as group_name,
+    coalesce(sg.name, '—') as subgroup_name,
+    sum(v.planned_value)::numeric(14,2) as planned_value,
+    sum(v.actual_value)::numeric(14,2) as actual_value
+  from public.vw_cost_analysis v
+  join public.items i on i.id = v.item_id
+  left join public.subgroups sg on sg.id = i.subgroup_id
+  join public.groups g on g.id = i.group_id
+  where g.name <> 'Total'
+  group by g.name, coalesce(sg.name, '—')
+)
+select
+  st.group_name,
+  st.subgroup_name,
+  st.planned_value,
+  st.actual_value,
+  (st.planned_value - st.actual_value)::numeric(14,2) as balance,
+  case
+    when st.planned_value = 0 then null
+    else (st.actual_value / nullif(st.planned_value, 0))::numeric(14,4)
+  end as percent_used,
+  case
+    when st.actual_value > st.planned_value then 'OVERBUDGET'
+    when st.actual_value >= st.planned_value * 0.9 then 'CRITICAL'
+    when st.actual_value >= st.planned_value * 0.7 then 'WARNING'
+    else 'OK'
+  end as status
+from sub_totals st;
+
 -- View por item/código (totais por atividade)
 -- Usa apenas o grupo 'Total' para evitar duplicidade com a quebra por MO/EQ/MAT.
-create or replace view public.vw_activity_cost_analysis as
+create or replace view public.vw_activity_cost_analysis
+with (security_invoker = true)
+as
 select
   v.item_id,
   v.item_name,
@@ -336,7 +379,9 @@ join public.items i on i.id = v.item_id
 where v.group_name = 'Total';
 
 -- View de evolução mensal por grupo (VP mês a mês)
-create or replace view public.vw_monthly_group_actuals as
+create or replace view public.vw_monthly_group_actuals
+with (security_invoker = true)
+as
 select
   date_trunc('month', c.cost_date)::date as month,
   g.name as group_name,
@@ -349,7 +394,9 @@ group by 1, 2
 order by 1, 2;
 
 -- View de evolução mensal total (para gráfico geral)
-create or replace view public.vw_monthly_total_actuals as
+create or replace view public.vw_monthly_total_actuals
+with (security_invoker = true)
+as
 select
   date_trunc('month', c.cost_date)::date as month,
   sum(c.amount)::numeric(14,2) as actual_value
@@ -361,7 +408,9 @@ group by 1
 order by 1;
 
 -- Lookup para selects (lançamentos) — itens com orçamento, exceto grupo Total
-create or replace view public.vw_item_lookup as
+create or replace view public.vw_item_lookup
+with (security_invoker = true)
+as
 select
   i.id as item_id,
   i.code as item_code,
@@ -377,7 +426,9 @@ where g.name <> 'Total'
   and coalesce(i.is_active, true) = true;
 
 -- Quebra estilo aba "Dados" (MO/EQ/MAT por código) para tela Visual
-create or replace view public.vw_visual_dados as
+create or replace view public.vw_visual_dados
+with (security_invoker = true)
+as
 select
   v.item_id,
   v.item_name,
@@ -396,7 +447,65 @@ left join public.subgroups sg on sg.id = i.subgroup_id
 where v.group_name <> 'Total';
 
 -- =========================
--- 5) QUERIES
+-- 5) RLS + grants (tabelas base + uso das views no PostgREST)
+-- =========================
+-- As VIEWS não guardam linhas próprias: o acesso passa pelas tabelas base.
+-- `security_invoker` nas views (acima) faz o Postgres aplicar RLS como o usuário da requisição (ex.: anon).
+-- Políticas abaixo: app interno com chave anon no frontend (ajuste depois para auth.uid()).
+
+alter table public.groups enable row level security;
+alter table public.subgroups enable row level security;
+alter table public.items enable row level security;
+alter table public.budgets enable row level security;
+alter table public.costs enable row level security;
+alter table public.costs_audit enable row level security;
+
+drop policy if exists "jl_anon_select_groups" on public.groups;
+drop policy if exists "jl_anon_select_subgroups" on public.subgroups;
+drop policy if exists "jl_anon_select_items" on public.items;
+drop policy if exists "jl_anon_all_budgets" on public.budgets;
+drop policy if exists "jl_anon_all_costs" on public.costs;
+drop policy if exists "jl_anon_select_costs_audit" on public.costs_audit;
+drop policy if exists "jl_anon_insert_costs_audit" on public.costs_audit;
+drop policy if exists "jl_anon_update_subgroups" on public.subgroups;
+
+create policy "jl_anon_select_groups"
+  on public.groups for select using (true);
+
+create policy "jl_anon_select_subgroups"
+  on public.subgroups for select using (true);
+
+create policy "jl_anon_select_items"
+  on public.items for select using (true);
+
+create policy "jl_anon_all_budgets"
+  on public.budgets for all using (true) with check (true);
+
+create policy "jl_anon_all_costs"
+  on public.costs for all using (true) with check (true);
+
+create policy "jl_anon_select_costs_audit"
+  on public.costs_audit for select using (true);
+
+create policy "jl_anon_insert_costs_audit"
+  on public.costs_audit for insert with check (true);
+
+create policy "jl_anon_update_subgroups"
+  on public.subgroups for update using (true) with check (true);
+
+-- API: leitura nas views expostas ao PostgREST (além das tabelas)
+grant usage on schema public to anon, authenticated;
+grant select on public.vw_cost_analysis to anon, authenticated;
+grant select on public.vw_group_cost_summary to anon, authenticated;
+grant select on public.vw_activity_cost_analysis to anon, authenticated;
+grant select on public.vw_monthly_group_actuals to anon, authenticated;
+grant select on public.vw_monthly_total_actuals to anon, authenticated;
+grant select on public.vw_item_lookup to anon, authenticated;
+grant select on public.vw_visual_dados to anon, authenticated;
+grant select on public.vw_subgroup_cost_summary to anon, authenticated;
+
+-- =========================
+-- 6) QUERIES (exemplos)
 -- =========================
 
 -- 5.1 Total summary (planned vs actual vs balance)

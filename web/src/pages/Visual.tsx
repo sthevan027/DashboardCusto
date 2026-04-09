@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { formatBRL, parseBRLInput } from '../lib/money'
 import { replaceItemActualWithManualTotal } from '../lib/costs'
+import { getErrorMessage } from '../lib/supabaseError'
 import { compareGroup, compareItemCode } from '../lib/sort'
 
 type Activity = {
@@ -72,7 +73,7 @@ export function Visual() {
       try {
         await load()
       } catch (e: unknown) {
-        setErr(e instanceof Error ? e.message : 'Erro ao carregar')
+        setErr(getErrorMessage(e))
       } finally {
         setLoading(false)
       }
@@ -112,7 +113,7 @@ export function Visual() {
       await replaceItemActualWithManualTotal(supabase, itemId, v, today)
       await load()
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : 'Erro ao salvar real')
+      setErr(getErrorMessage(e))
     } finally {
       setSaving(null)
     }
