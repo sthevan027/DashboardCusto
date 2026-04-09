@@ -37,6 +37,7 @@ O mesmo **`code`** pode existir no grupo **Total** e também em **Mão de Obra /
 - Visão **por atividade / contrato** (`vw_cost_activity_analysis`): usa só itens do grupo **Total** (uma linha por código no contrato).
 - Visão **por quebra operacional** (`vw_cost_budget_line_unique` e derivados): usa itens **fora** do grupo Total; evita dupla contagem quando o código existe nas duas frentes.
 - Itens que existem **somente** no Total (sem linha irmã em MO/EQ/MAT com o mesmo código) entram no agregado **`Outros (só no contrato)`** em `vw_cost_group_summary` / `vw_cost_subgroup_summary`, para a soma por grupo fechar com o total do contrato.
+- A view **`vw_cost_contract_only_items`** lista cada linha “só no contrato”; no **Detalhamento → Por grupo**, esses valores somam em **Mão de Obra** e o item (ex. **6.1.1**) aparece como sublinha logo abaixo desse grupo.
 
 ## Seed (`seed.generated.sql`)
 
