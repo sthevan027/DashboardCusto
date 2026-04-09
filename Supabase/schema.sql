@@ -325,6 +325,33 @@ from public.vw_cost_analysis v
 join public.cost_items i on i.id = v.item_id
 where v.group_name = 'Total';
 
+create or replace view public.vw_cost_contract_only_items
+with (security_invoker = true)
+as
+select
+  v.item_id,
+  v.item_name,
+  i.code as item_code,
+  v.planned_value,
+  v.actual_value,
+  v.balance,
+  v.percent_used,
+  v.status
+from public.vw_cost_analysis v
+join public.cost_items i on i.id = v.item_id
+join public.cost_groups g on g.id = i.group_id
+where g.name = 'Total'
+  and not exists (
+    select 1
+    from public.cost_items i2
+    join public.cost_groups g2 on g2.id = i2.group_id
+    where g2.name in ('Mão de Obra', 'Equipamento', 'Materiais')
+      and (
+        (i.code is not null and i2.code is not null and i2.code = i.code)
+        or (i.code is null and i2.code is null and i2.name = i.name)
+      )
+  );
+
 create or replace view public.vw_cost_monthly_group_actuals
 with (security_invoker = true)
 as
@@ -462,6 +489,7 @@ grant select on public.vw_cost_analysis to anon, authenticated;
 grant select on public.vw_cost_budget_line_unique to anon, authenticated;
 grant select on public.vw_cost_group_summary to anon, authenticated;
 grant select on public.vw_cost_activity_analysis to anon, authenticated;
+grant select on public.vw_cost_contract_only_items to anon, authenticated;
 grant select on public.vw_cost_monthly_group_actuals to anon, authenticated;
 grant select on public.vw_cost_monthly_total_actuals to anon, authenticated;
 grant select on public.vw_cost_item_lookup to anon, authenticated;
