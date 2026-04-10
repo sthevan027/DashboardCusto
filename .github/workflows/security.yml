@@ -7,8 +7,8 @@ on:
   pull_request:
     branches: [main, master]
   schedule:
-    # Toda segunda-feira 06:00 UTC — cobre CVEs novos no lockfile.
-    - cron: "0 6 * * 1"
+    # Toda segunda-feira 09:00 UTC — cobre CVEs novos no lockfile.
+    - cron: "0 9 * * 1"
 
 permissions:
   contents: read
