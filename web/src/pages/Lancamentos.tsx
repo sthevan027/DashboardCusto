@@ -312,7 +312,7 @@ export function Lancamentos() {
       : rateioPreviewRows.slice(0, RATEIO_PREVIEW_VISIBLE));
 
   return (
-    <div className="w-full max-w-[1600px] pb-16">
+    <div className="w-full max-w-400 pb-16">
       <header className="mb-8 lg:mb-10">
         <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-(--text)">
           Lançamentos
@@ -577,7 +577,7 @@ export function Lancamentos() {
                               key={row.item.item_id}
                               className="border-b border-(--border)/60 last:border-0"
                             >
-                              <td className="max-w-[200px] truncate px-3 py-2 text-(--text)">
+                              <td className="max-w-50 truncate px-3 py-2 text-(--text)">
                                 {row.item.item_code ?? "—"} ·{" "}
                                 {row.item.item_name.slice(0, 48)}
                                 {row.item.item_name.length > 48 ? "…" : ""}
@@ -753,7 +753,7 @@ export function Lancamentos() {
                       {dateFmt}
                       {row.description ? (
                         <span
-                          className="line-clamp-2 block break-words"
+                          className="line-clamp-2 block wrap-break-word"
                           title={row.description}
                         >
                           {row.description}

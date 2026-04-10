@@ -13,9 +13,16 @@ dist
 dist-ssr
 *.local
 
+#env
+.env
+.env.development
+.env.test
+.env.production
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
 .idea
 .DS_Store
 *.suo
@@ -25,4 +32,3 @@ dist-ssr
 #IDE directories and files
 .cursor
 .Zed
-.vscode

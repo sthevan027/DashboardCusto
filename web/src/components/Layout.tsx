@@ -99,7 +99,7 @@ function BrandLogo({ className }: { className?: string }) {
 const navItemBase =
   "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors";
 const navInactive =
-  "text-(--muted) hover:bg-[var(--nav-hover)] hover:text-(--text)";
+  "text-(--muted) hover:bg-(--nav-hover) hover:text-(--text)";
 const navActive = "bg-(--accent) text-white shadow-sm";
 
 const items: {
@@ -117,7 +117,7 @@ const items: {
 export function Layout() {
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
-      <aside className="flex shrink-0 flex-col border-b border-(--border) bg-(--card) md:sticky md:top-0 md:h-screen md:w-[260px] md:border-r md:border-b-0 md:shadow-[1px_0_0_var(--border)]">
+      <aside className="flex shrink-0 flex-col border-b border-(--border) bg-(--card) md:sticky md:top-0 md:h-screen md:w-65 md:border-r md:border-b-0">
         <div className="flex items-start gap-3 border-b border-(--border) px-5 py-5 md:py-6">
           <BrandLogo />
           <div className="min-w-0 text-left">
@@ -150,7 +150,7 @@ export function Layout() {
       </aside>
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col bg-(--app-bg)">
-        <main className="mx-auto w-full max-w-[1600px] flex-1 px-5 py-8 text-left sm:px-8 lg:px-10">
+        <main className="mx-auto w-full max-w-400 flex-1 px-5 py-8 text-left sm:px-8 lg:px-10">
           <Outlet />
         </main>
       </div>

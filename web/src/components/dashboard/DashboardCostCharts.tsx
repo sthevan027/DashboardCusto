@@ -98,14 +98,14 @@ function DistributionDonutCard({ mo, eq, mat }: { mo: number; eq: number; mat: n
   const hideTip = useCallback(() => setTip(null), []);
 
   return (
-    <div className="flex h-full flex-col rounded-xl border border-(--border) bg-(--card) p-5 shadow-[var(--shadow-card)]">
+    <div className="flex h-full flex-col rounded-xl border border-(--border) bg-(--card) p-5 shadow-(--shadow-card)">
       <h2 className="text-base font-semibold tracking-tight text-(--text)">
         Distribuição de Custos
       </h2>
       <p className="mt-1 text-xs text-(--muted)">Previsto por grupo (contrato)</p>
 
       <div className="mt-6 flex flex-1 flex-col items-center justify-center gap-6">
-        <div className="relative w-[min(260px,90vw)] max-w-[280px]">
+        <div className="relative w-[min(260px,90vw)] max-w-70">
           <svg
             viewBox={`0 0 ${VB} ${VB}`}
             className="h-auto w-full overflow-visible"
@@ -159,7 +159,7 @@ function DistributionDonutCard({ mo, eq, mat }: { mo: number; eq: number; mat: n
 
           {tip && (
             <div
-              className="pointer-events-none fixed z-[100] rounded-lg border border-(--border) bg-[#141414] px-3 py-2 text-left text-xs shadow-xl ring-1 ring-white/10"
+              className="pointer-events-none fixed z-100 rounded-lg border border-(--border) bg-[#141414] px-3 py-2 text-left text-xs shadow-xl ring-1 ring-white/10"
               style={{
                 left: tip.clientX + 12,
                 top: tip.clientY + 12,
@@ -234,21 +234,21 @@ function EquipmentHorizontalCard({
   }, [maxVal]);
 
   return (
-    <div className="flex h-full flex-col rounded-xl border border-(--border) bg-(--card) p-5 shadow-[var(--shadow-card)]">
+    <div className="flex h-full flex-col rounded-xl border border-(--border) bg-(--card) p-5 shadow-(--shadow-card)">
       <h2 className="text-base font-semibold tracking-tight text-(--text)">
         Custos por Equipamento
       </h2>
       <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-(--muted)">
         <span className="inline-flex items-center gap-2">
           <span
-            className="size-2.5 shrink-0 rounded-full bg-[var(--chart-planned)] shadow-[0_0_12px_rgba(59,130,246,0.45)]"
+            className="size-2.5 shrink-0 rounded-full bg-(--chart-planned) shadow-[0_0_12px_rgba(59,130,246,0.45)]"
             aria-hidden
           />
           <span>Previsto</span>
         </span>
         <span className="inline-flex items-center gap-2">
           <span
-            className="size-2.5 shrink-0 rounded-full bg-[var(--chart-actual)] shadow-[0_0_12px_rgba(239,68,68,0.4)]"
+            className="size-2.5 shrink-0 rounded-full bg-(--chart-actual) shadow-[0_0_12px_rgba(239,68,68,0.4)]"
             aria-hidden
           />
           <span>Realizado</span>
@@ -262,7 +262,7 @@ function EquipmentHorizontalCard({
           </p>
         ) : (
           <>
-            <div className="mb-3 flex justify-between pl-[7.25rem] text-[10px] tabular-nums text-(--muted) sm:text-xs">
+            <div className="mb-3 flex justify-between pl-29 text-[10px] tabular-nums text-(--muted) sm:text-xs">
               {ticks.map((v, i) => (
                 <span key={i} className="text-right">
                   {formatBRLAxis(v)}
@@ -293,7 +293,7 @@ function EquipmentHorizontalCard({
                         {[0, 1, 2, 3, 4].map((i) => (
                           <div
                             key={i}
-                            className="border-r border-dotted border-[var(--chart-grid-line)] last:border-0"
+                            className="border-r border-dotted border-(--chart-grid-line) last:border-0"
                           />
                         ))}
                       </div>
@@ -305,9 +305,9 @@ function EquipmentHorizontalCard({
                           >
                             P
                           </span>
-                          <div className="relative h-4 min-w-0 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
+                          <div className="relative h-4 min-w-0 flex-1 overflow-hidden rounded-full bg-white/6">
                             <div
-                              className="absolute left-0 top-0 z-0 h-4 min-w-[3px] rounded-r-full bg-[var(--chart-planned)] shadow-[0_0_16px_rgba(59,130,246,0.35)]"
+                              className="absolute left-0 top-0 z-0 h-4 min-w-0.75 rounded-r-full bg-(--chart-planned) shadow-[0_0_16px_rgba(59,130,246,0.35)]"
                               style={{
                                 width: `${Math.min(100, Math.max(wPlan, planned > 0 ? 0.35 : 0))}%`,
                               }}
@@ -323,9 +323,9 @@ function EquipmentHorizontalCard({
                           >
                             R
                           </span>
-                          <div className="relative h-4 min-w-0 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
+                          <div className="relative h-4 min-w-0 flex-1 overflow-hidden rounded-full bg-white/6">
                             <div
-                              className="absolute left-0 top-0 z-0 h-4 min-w-[3px] rounded-r-full bg-[var(--chart-actual)] shadow-[0_0_16px_rgba(239,68,68,0.35)]"
+                              className="absolute left-0 top-0 z-0 h-4 min-w-0.75 rounded-r-full bg-(--chart-actual) shadow-[0_0_16px_rgba(239,68,68,0.35)]"
                               style={{
                                 width: `${Math.min(100, Math.max(wAct, actual > 0 ? 0.35 : 0))}%`,
                               }}
@@ -366,7 +366,7 @@ export function DashboardCostCharts({ subgroups }: Props) {
 
   if (!hasAny) {
     return (
-      <section className="rounded-xl border border-(--border) bg-(--card) p-4 shadow-[var(--shadow-card)]">
+      <section className="rounded-xl border border-(--border) bg-(--card) p-4 shadow-(--shadow-card)">
         <h2 className="text-lg font-semibold">Gráficos</h2>
         <p className="mt-2 text-sm text-(--muted)">Sem dados para os gráficos.</p>
       </section>

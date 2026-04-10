@@ -230,7 +230,7 @@ export function Historico() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-(--border) bg-(--card)">
-        <table className="w-full min-w-[800px] text-left text-sm">
+        <table className="w-full min-w-200 text-left text-sm">
           <thead>
             <tr className="border-b border-(--border) bg-slate-50 dark:bg-slate-800/80">
               <th className="px-3 py-2.5 font-medium">Quando</th>

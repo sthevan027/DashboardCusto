@@ -29,7 +29,7 @@ function matchesTopicFilter(groupName: string, topic: TopicFilter): boolean {
 function KpiIconWrap({ children }: { children: ReactNode }) {
   return (
     <div
-      className="pointer-events-none absolute top-3 right-3 flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]"
+      className="pointer-events-none absolute top-3 right-3 flex h-10 w-10 items-center justify-center rounded-lg bg-(--accent-soft) text-(--accent)"
       aria-hidden
     >
       {children}
@@ -632,7 +632,7 @@ export function Dashboard() {
           </div>
         </div>
         {loadedAt && (
-          <div className="shrink-0 rounded-xl border border-(--border) bg-(--card) px-4 py-3 text-xs text-(--muted) shadow-[var(--shadow-card)]">
+          <div className="shrink-0 rounded-xl border border-(--border) bg-(--card) px-4 py-3 text-xs text-(--muted) shadow-(--shadow-card)">
             <div className="font-medium text-(--text)">Atualizado</div>
             <div className="mt-1 tabular-nums text-(--text)">
               {nowTick.toLocaleString("pt-BR", {
@@ -650,7 +650,7 @@ export function Dashboard() {
 
       <section className="space-y-3">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="relative overflow-hidden rounded-xl border border-(--border) bg-(--card) p-4 pr-14 shadow-[var(--shadow-card)]">
+          <div className="relative overflow-hidden rounded-xl border border-(--border) bg-(--card) p-4 pr-14 shadow-(--shadow-card)">
             <KpiIconWrap>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1h4a1 1 0 0 1-1 1h-1" />
@@ -667,7 +667,7 @@ export function Dashboard() {
               {totalsKpi.planned > 0 ? "100% da base contratual" : "—"}
             </p>
           </div>
-          <div className="relative overflow-hidden rounded-xl border border-(--border) bg-(--card) p-4 pr-14 shadow-[var(--shadow-card)]">
+          <div className="relative overflow-hidden rounded-xl border border-(--border) bg-(--card) p-4 pr-14 shadow-(--shadow-card)">
             <KpiIconWrap>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
@@ -685,7 +685,7 @@ export function Dashboard() {
                 : "—"}
             </p>
           </div>
-          <div className="relative overflow-hidden rounded-xl border border-(--border) bg-(--card) p-4 pr-14 shadow-[var(--shadow-card)]">
+          <div className="relative overflow-hidden rounded-xl border border-(--border) bg-(--card) p-4 pr-14 shadow-(--shadow-card)">
             <KpiIconWrap>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
@@ -708,7 +708,7 @@ export function Dashboard() {
                 : "—"}
             </p>
           </div>
-          <div className="relative overflow-hidden rounded-xl border border-(--border) bg-(--card) p-4 pr-14 shadow-[var(--shadow-card)]">
+          <div className="relative overflow-hidden rounded-xl border border-(--border) bg-(--card) p-4 pr-14 shadow-(--shadow-card)">
             <KpiIconWrap>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
@@ -734,7 +734,7 @@ export function Dashboard() {
 
       <DashboardCostCharts subgroups={subgroupsAdjusted} />
 
-      <section className="space-y-4 rounded-xl border border-(--border) bg-(--card) p-5 shadow-[var(--shadow-card)]">
+      <section className="space-y-4 rounded-xl border border-(--border) bg-(--card) p-5 shadow-(--shadow-card)">
         <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold tracking-tight text-(--text)">
@@ -750,7 +750,7 @@ export function Dashboard() {
               className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                 detailTab === "group"
                   ? "bg-(--accent-soft) text-(--accent) ring-1 ring-(--accent)/30"
-                  : "border border-(--border) bg-[var(--input-bg)] text-(--text) hover:bg-[var(--nav-hover)]"
+                  : "border border-(--border) bg-(--input-bg) text-(--text) hover:bg-(--nav-hover)"
               }`}
               onClick={() => setDetailTab("group")}
             >
@@ -761,7 +761,7 @@ export function Dashboard() {
               className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                 detailTab === "subgroup"
                   ? "bg-(--accent-soft) text-(--accent) ring-1 ring-(--accent)/30"
-                  : "border border-(--border) bg-[var(--input-bg)] text-(--text) hover:bg-[var(--nav-hover)]"
+                  : "border border-(--border) bg-(--input-bg) text-(--text) hover:bg-(--nav-hover)"
               }`}
               onClick={() => setDetailTab("subgroup")}
             >
@@ -769,7 +769,7 @@ export function Dashboard() {
             </button>
             <button
               type="button"
-              className="rounded-lg border border-(--border) bg-[var(--input-bg)] px-3 py-2 text-sm font-medium text-(--text) hover:bg-[var(--nav-hover)]"
+              className="rounded-lg border border-(--border) bg-(--input-bg) px-3 py-2 text-sm font-medium text-(--text) hover:bg-(--nav-hover)"
               onClick={exportDetailCsv}
             >
               Exportar CSV
@@ -785,7 +785,7 @@ export function Dashboard() {
               value={filterQuery}
               onChange={(e) => setFilterQuery(e.target.value)}
               placeholder="Grupo, subgrupo ou código"
-              className="rounded-lg border border-(--border) bg-[var(--input-bg)] px-3 py-2 text-sm text-(--text) placeholder:text-(--muted)/70"
+              className="rounded-lg border border-(--border) bg-(--input-bg) px-3 py-2 text-sm text-(--text) placeholder:text-(--muted)/70"
             />
           </label>
           <label className="flex w-full min-w-44 flex-col gap-1.5 text-xs font-medium text-(--muted) sm:w-auto">
@@ -795,7 +795,7 @@ export function Dashboard() {
               onChange={(e) =>
                 setTopicFilter(e.target.value as TopicFilter)
               }
-              className="rounded-lg border border-(--border) bg-[var(--input-bg)] px-3 py-2 text-sm text-(--text)"
+              className="rounded-lg border border-(--border) bg-(--input-bg) px-3 py-2 text-sm text-(--text)"
             >
               <option value="all">Todos</option>
               <option value="Mão de Obra">Mão de Obra</option>
@@ -809,7 +809,7 @@ export function Dashboard() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-lg border border-(--border) bg-[var(--input-bg)] px-3 py-2 text-sm text-(--text)"
+              className="rounded-lg border border-(--border) bg-(--input-bg) px-3 py-2 text-sm text-(--text)"
             >
               <option value="all">Todos</option>
               <option value="OVERBUDGET">Acima do orçado</option>
@@ -821,9 +821,9 @@ export function Dashboard() {
         </div>
 
         {detailTab === "group" && (
-          <div className="mt-4 max-h-[min(70vh,640px)] overflow-auto rounded-lg border border-(--border) bg-[var(--input-bg)]">
+          <div className="mt-4 max-h-[min(70vh,640px)] overflow-auto rounded-lg border border-(--border) bg-(--input-bg)">
             <table className="w-full min-w-160 text-sm">
-              <thead className="sticky top-0 z-10 border-b border-(--border) bg-[var(--table-header-bg)]">
+              <thead className="sticky top-0 z-10 border-b border-(--border) bg-(--table-header-bg)">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium tracking-wide text-(--muted) uppercase">
                     <button
@@ -928,9 +928,9 @@ export function Dashboard() {
                       className="border-b border-(--border) last:border-0"
                     >
                       <td className="px-3 py-2">
-                        <div className="ml-2 flex items-start gap-2.5 border-l-2 border-[var(--donut-eq)]/45 pl-3">
+                        <div className="ml-2 flex items-start gap-2.5 border-l-2 border-(--donut-eq)/45 pl-3">
                           <span
-                            className="mt-1.5 size-2 shrink-0 rounded-full bg-[var(--donut-eq)] shadow-[0_0_10px_rgba(45,212,191,0.35)]"
+                            className="mt-1.5 size-2 shrink-0 rounded-full bg-(--donut-eq) shadow-[0_0_10px_rgba(45,212,191,0.35)]"
                             aria-hidden
                           />
                           <div className="min-w-0 flex-1">
@@ -963,7 +963,7 @@ export function Dashboard() {
                   ),
                 )}
               </tbody>
-              <tfoot className="sticky bottom-0 z-10 border-t border-(--border) bg-[var(--table-footer-bg)] font-medium">
+              <tfoot className="sticky bottom-0 z-10 border-t border-(--border) bg-(--table-footer-bg) font-medium">
                 <tr>
                   <td className="px-4 py-3">Total (visível)</td>
                   <td className="px-4 py-3 text-right tabular-nums">
@@ -982,9 +982,9 @@ export function Dashboard() {
           </div>
         )}
         {detailTab === "subgroup" && (
-          <div className="mt-4 max-h-[min(70vh,640px)] overflow-auto rounded-lg border border-(--border) bg-[var(--input-bg)]">
+          <div className="mt-4 max-h-[min(70vh,640px)] overflow-auto rounded-lg border border-(--border) bg-(--input-bg)">
             <table className="w-full min-w-180 text-sm">
-              <thead className="sticky top-0 z-10 border-b border-(--border) bg-[var(--table-header-bg)]">
+              <thead className="sticky top-0 z-10 border-b border-(--border) bg-(--table-header-bg)">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium tracking-wide text-(--muted) uppercase">
                     <button
@@ -1101,7 +1101,7 @@ export function Dashboard() {
                   </tr>
                 ))}
               </tbody>
-              <tfoot className="sticky bottom-0 z-10 border-t border-(--border) bg-[var(--table-footer-bg)] font-medium">
+              <tfoot className="sticky bottom-0 z-10 border-t border-(--border) bg-(--table-footer-bg) font-medium">
                 <tr>
                   <td className="px-4 py-3" colSpan={2}>
                     Total (visível)
