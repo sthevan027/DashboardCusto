@@ -3,9 +3,9 @@ name: Segurança
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
-    branches: [main, master]
+    branches: [main]
   schedule:
     # Toda segunda-feira 09:00 UTC — cobre CVEs novos no lockfile.
     - cron: "0 9 * * 1"
