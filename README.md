@@ -41,9 +41,40 @@ O mesmo **`code`** pode existir no grupo **Total** e também em **Mão de Obra /
 
 ## Seed (`seed.generated.sql`)
 
-- **Fonte**: `Excel/Controle Operacional V2.xlsx`, aba **Dados**.
+- **Fonte padrão**: `Excel/Controle Operacional V2.xlsx`, aba **Dados**.
 - **Grupo Total**: linhas pai — total previsto/real por código.
 - **Grupos MO/EQ/MAT**: quebra por subgrupo; nome do item costuma seguir o padrão `descrição — subgrupo`.
+
+Geração do seed:
+
+```bash
+python3 -m pip install openpyxl
+python3 scripts/generate_seed_from_excel.py
+```
+
+Listar abas disponíveis no Excel:
+
+```bash
+python3 scripts/generate_seed_from_excel.py --list-sheets
+```
+
+Gerar o seed a partir de uma aba específica:
+
+```bash
+python3 scripts/generate_seed_from_excel.py --sheet "Dados"
+```
+
+Usando outro arquivo Excel:
+
+```bash
+python3 scripts/generate_seed_from_excel.py --excel "Excel/Anexo_I_-_PQ-8001PZ-G-11007_Rev.ALT_REV08.xlsx" --sheet "Nome da Aba"
+```
+
+Se você estiver dentro da pasta `scripts/`, rode:
+
+```bash
+python3 generate_seed_from_excel.py --sheet "Dados"
+```
 
 ### Notas e sanity (referência da geração do seed)
 
