@@ -15,21 +15,31 @@ Regras:
 
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 import unicodedata
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 try:
     import openpyxl
 except ImportError:
-    print("Instale openpyxl: pip install openpyxl", file=sys.stderr)
-    sys.exit(1)
+    openpyxl = None
+
+
+def get_openpyxl() -> Any:
+    if openpyxl is None:
+        print("Instale openpyxl: python3 -m pip install openpyxl", file=sys.stderr)
+        sys.exit(1)
+    return openpyxl
+
 
 REPO = Path(__file__).resolve().parents[1]
 EXCEL = REPO / "Excel" / "Controle Operacional V2.xlsx"
 OUT = REPO / "Supabase" / "seed.generated.sql"
+DEFAULT_SHEET = "Dados"
 
 
 def sql_str(s: str) -> str:
@@ -41,6 +51,19 @@ def money(x: float) -> str:
     if v < 0:
         v = 0.0
     return f"{v:.2f}"
+
+
+def as_text(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def as_float(value: Any) -> float:
+    try:
+        return float(value) if value is not None else 0.0
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def norm_group(desc: str | None) -> str | None:
@@ -138,14 +161,21 @@ def recompute_display_labels(lines: list[dict]) -> None:
         b["display_label"] = sg if n == 1 else f"{sg} (#{n})"
 
 
-def parse_dados() -> tuple[list[dict], dict[str, float]]:
-    wb = openpyxl.load_workbook(EXCEL, read_only=True, data_only=True)
-    ws = wb["Dados"]
-    rows = list(ws.iter_rows(values_only=True))
+def parse_dados(excel_path: Path, sheet_name: str) -> tuple[list[dict], dict[str, float]]:
+    openpyxl_mod = get_openpyxl()
+    wb = openpyxl_mod.load_workbook(excel_path, read_only=True, data_only=True)
+    if sheet_name not in wb.sheetnames:
+        available = ", ".join(wb.sheetnames)
+        wb.close()
+        raise KeyError(
+            f"Aba '{sheet_name}' não encontrada em {excel_path.name}. Abas disponíveis: {available}"
+        )
+    ws = wb[sheet_name]
+    rows: list[tuple[Any, ...]] = list(ws.iter_rows(values_only=True))
     wb.close()
 
-    parents: list[dict] = []
-    current: dict | None = None
+    parents: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
 
     def push_breakdown(group: str, subgroup: str, tp: float, tr: float) -> None:
         assert current is not None
@@ -166,17 +196,11 @@ def parse_dados() -> tuple[list[dict], dict[str, float]]:
 
     for row in rows[4:]:
         a, b, c, d, e = row[0], row[1], row[2], row[3], row[4]
-        code = str(a).strip() if a else ""
-        desc = str(b).strip() if b else ""
-        sub = str(c).strip() if c else ""
-        try:
-            tp = float(d) if d is not None else 0.0
-        except (TypeError, ValueError):
-            tp = 0.0
-        try:
-            tr = float(e) if e is not None else 0.0
-        except (TypeError, ValueError):
-            tr = 0.0
+        code = as_text(a)
+        desc = as_text(b)
+        sub = as_text(c)
+        tp = as_float(d)
+        tr = as_float(e)
 
         if code and re.match(r"^[\d.]+", code):
             if current:
@@ -192,8 +216,8 @@ def parse_dados() -> tuple[list[dict], dict[str, float]]:
                 "sub_order": defaultdict(int),
             }
         elif current:
-            b_raw = str(row[1]).strip() if row[1] else ""
-            c_raw = str(row[2]).strip() if row[2] else ""
+            b_raw = as_text(row[1] if len(row) > 1 else None)
+            c_raw = as_text(row[2] if len(row) > 2 else None)
             if not b_raw and not c_raw:
                 continue
 
@@ -205,13 +229,13 @@ def parse_dados() -> tuple[list[dict], dict[str, float]]:
                     current["section"] = "Materiais"
                 continue
 
-            nb = norm_group(row[1])
+            nb = norm_group(b_raw)
             if nb:
                 current["section"] = nb
                 push_breakdown(nb, c_raw or b_raw, tp, tr)
             else:
                 sec = current.get("section")
-                if not sec:
+                if not isinstance(sec, str) or not sec:
                     continue
                 leaf_sub = (c_raw or b_raw or "—").strip() or "—"
                 push_breakdown(sec, leaf_sub, tp, tr)
@@ -266,27 +290,79 @@ def item_breakdown_name(parent_name: str, display_label: str) -> str:
     return f"{parent_name} — {display_label}"
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Gera o seed SQL do Supabase a partir de uma aba do Excel."
+    )
+    parser.add_argument(
+        "--excel",
+        default=str(EXCEL),
+        help="Caminho do arquivo Excel. Padrão: Excel/Controle Operacional V2.xlsx",
+    )
+    parser.add_argument(
+        "--sheet",
+        default=DEFAULT_SHEET,
+        help=f"Nome da aba a ser lida. Padrão: {DEFAULT_SHEET}",
+    )
+    parser.add_argument(
+        "--out",
+        default=str(OUT),
+        help="Arquivo SQL de saída. Padrão: Supabase/seed.generated.sql",
+    )
+    parser.add_argument(
+        "--list-sheets",
+        action="store_true",
+        help="Lista as abas disponíveis no Excel informado e encerra.",
+    )
+    return parser.parse_args()
+
+
+def resolve_user_path(value: str) -> Path:
+    path = Path(value).expanduser()
+    if path.is_absolute():
+        return path
+    return (Path.cwd() / path).resolve()
+
+
 def generate() -> int:
-    if not EXCEL.is_file():
-        print(f"Arquivo não encontrado: {EXCEL}", file=sys.stderr)
+    args = parse_args()
+    excel_path = resolve_user_path(args.excel)
+    out_path = resolve_user_path(args.out)
+
+    if not excel_path.is_file():
+        print(f"Arquivo não encontrado: {excel_path}", file=sys.stderr)
         return 1
 
-    parents, sums = parse_dados()
+    if args.list_sheets:
+        openpyxl_mod = get_openpyxl()
+        wb = openpyxl_mod.load_workbook(excel_path, read_only=True, data_only=True)
+        for sheet_name in wb.sheetnames:
+            print(sheet_name)
+        wb.close()
+        return 0
+
+    try:
+        parents, sums = parse_dados(excel_path, args.sheet)
+    except KeyError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
     subgroups = build_subgroups(parents)
 
     lines: list[str] = []
     w = lines.append
 
     w("-- Seed gerado automaticamente (scripts/generate_seed_from_excel.py)")
-    w("-- Fonte: Excel/Controle Operacional V2.xlsx — aba Dados")
+    source_label = excel_path.relative_to(REPO) if excel_path.is_relative_to(REPO) else excel_path
+    w(f"-- Fonte: {source_label} — aba {args.sheet}")
     w("--")
     w("-- Grupo Total: Total previsto/real por código (linha pai).")
     w("-- Grupos MO/EQ/MAT: quebra por subgrupo; nome do item = \"descrição — subgrupo\".")
     w("--")
-    w("-- Nota: a soma dos Total previsto das linhas pai em Dados pode diferir do")
+    w(f"-- Nota: a soma dos Total previsto das linhas pai em {args.sheet} pode diferir do")
     w("-- \"Total\" na aba Controle (~8.04M vs ~8.09M). O seed reflete Dados.")
     w("--")
-    w("-- Sanity (aba Dados):")
+    w(f"-- Sanity (aba {args.sheet}):")
     w(f"--   Soma Total previsto (linhas pai): {sums['parent_planned']:.2f}")
     w(f"--   Soma Total real (linhas pai): {sums['parent_real']:.2f}")
     w(f"--   Soma previsto (MO+EQ+MAT detalhado): {sums['bd_planned']:.2f}")
@@ -393,7 +469,7 @@ def generate() -> int:
     w("on conflict (item_id) do nothing;")
     w("")
 
-    desc = "Posição atual (Excel V2 — aba Dados)"
+    desc = f"Posição atual ({excel_path.name} — aba {args.sheet})"
 
     w("-- Costs (real total por código)")
     w("insert into public.cost_entries (item_id, cost_date, amount, description, external_id)")
@@ -452,8 +528,10 @@ def generate() -> int:
     w("on conflict (item_id, external_id) do nothing;")
     w("")
 
-    OUT.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"Escrito: {OUT} ({len(parents)} itens pai, {sum(len(p['breakdown']) for p in parents)} linhas de quebra)")
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(
+        f"Escrito: {out_path} ({len(parents)} itens pai, {sum(len(p['breakdown']) for p in parents)} linhas de quebra)"
+    )
     return 0
 
 
