@@ -17,6 +17,7 @@ export type EqBucketKey =
   | "munck"
   | "maquinas"
   | "container"
+  | "eq_generico"
   | "outros";
 
 function fold(s: string): string {
@@ -24,6 +25,12 @@ function fold(s: string): string {
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+}
+
+/** Subgrupo só com o nome genérico (singular/plural), ex.: "Equipamento" vs "Equipamentos". */
+function isGenericEquipSubgroupNameFolded(t: string): boolean {
+  const compact = t.replace(/\s+/g, "");
+  return /^(equipamento|equipamentos)$/.test(compact);
 }
 
 function sumPair(rows: SubgroupRow[]): { p: number; a: number } {
@@ -39,6 +46,7 @@ function sumPair(rows: SubgroupRow[]): { p: number; a: number } {
 /** Agrupa linhas de equipamento por palavras-chave do subgrupo. */
 export function classifyEquip(sub: string): EqBucketKey {
   const t = fold(sub);
+  if (isGenericEquipSubgroupNameFolded(t)) return "eq_generico";
   if (t.includes("onibus") || t.includes("nibus")) return "onibus";
   if (t.includes("munck")) return "munck";
   if (t.includes("guindaste")) return "guindaste";
@@ -87,8 +95,12 @@ export function buildCostDistributionTriplet(rows: SubgroupRow[]): {
   return { mo, eq, mat };
 }
 
+function sortBarsByPlannedDesc(bars: SubgroupChartBar[]): SubgroupChartBar[] {
+  return [...bars].sort((a, b) => b.planned_value - a.planned_value);
+}
+
 /**
- * Apenas equipamento, ordem fixa (alinhada ao layout “Custos por Equipamento”).
+ * Equipamento: buckets consolidados, ordenados do maior ao menor (previsto).
  */
 export function buildEquipmentHorizontalSeries(
   rows: SubgroupRow[],
@@ -101,6 +113,7 @@ export function buildEquipmentHorizontalSeries(
     munck: [],
     maquinas: [],
     container: [],
+    eq_generico: [],
     outros: [],
   };
   for (const r of eq) {
@@ -115,13 +128,18 @@ export function buildEquipmentHorizontalSeries(
       label: "Máquinas Pesadas",
       full: "Equipamento — Máquinas pesadas",
     },
+    {
+      key: "eq_generico",
+      label: "Equipamentos (diversos)",
+      full: "Equipamento — Nome genérico (unificado)",
+    },
     { key: "outros", label: "Outros", full: "Equipamento — Outros" },
     { key: "container", label: "Contêiner", full: "Equipamento — Contêiner" },
     { key: "munck", label: "Munck", full: "Equipamento — Munck" },
     { key: "guindaste", label: "Guindaste", full: "Equipamento — Guindaste" },
   ];
 
-  return eqOrder.map((d) => {
+  const bars = eqOrder.map((d) => {
     const s = sumPair(eqBuckets[d.key]);
     return {
       id: `eq-h-${d.key}`,
@@ -131,6 +149,57 @@ export function buildEquipmentHorizontalSeries(
       actual_value: s.a,
     };
   });
+  return sortBarsByPlannedDesc(bars);
+}
+
+export type MatBucketKey =
+  | "ferramental"
+  | "consumiveis"
+  | "andaime"
+  | "cacamba"
+  | "outros";
+
+/**
+ * Materiais: mesmos buckets do gráfico combinado, do maior ao menor (previsto).
+ */
+export function buildMaterialHorizontalSeries(
+  rows: SubgroupRow[],
+): SubgroupChartBar[] {
+  const mat = rows.filter((r) => r.group_name === "Materiais");
+  const matBuckets: Record<MatBucketKey, SubgroupRow[]> = {
+    ferramental: [],
+    consumiveis: [],
+    andaime: [],
+    cacamba: [],
+    outros: [],
+  };
+  for (const r of mat) {
+    matBuckets[classifyMat(r.subgroup_name)].push(r);
+  }
+
+  const matDefs: { key: MatBucketKey; label: string; full: string }[] = [
+    { key: "ferramental", label: "Ferramental", full: "Materiais — Ferramental" },
+    {
+      key: "consumiveis",
+      label: "Consumíveis",
+      full: "Materiais — Consumíveis",
+    },
+    { key: "andaime", label: "Andaime", full: "Materiais — Andaime" },
+    { key: "cacamba", label: "Caçamba", full: "Materiais — Caçamba" },
+    { key: "outros", label: "Outros", full: "Materiais — Outros" },
+  ];
+
+  const bars = matDefs.map((d) => {
+    const s = sumPair(matBuckets[d.key]);
+    return {
+      id: `mat-h-${d.key}`,
+      label: d.label,
+      fullLabel: d.full,
+      planned_value: s.p,
+      actual_value: s.a,
+    };
+  });
+  return sortBarsByPlannedDesc(bars);
 }
 
 /**
@@ -149,6 +218,7 @@ export function buildSubgroupChartSeries(rows: SubgroupRow[]): SubgroupChartBar[
     munck: [],
     maquinas: [],
     container: [],
+    eq_generico: [],
     outros: [],
   };
   for (const r of eq) {
@@ -191,6 +261,11 @@ export function buildSubgroupChartSeries(rows: SubgroupRow[]): SubgroupChartBar[
       key: "maquinas",
       label: "Máq. pesadas",
       full: "Equipamento — Máquinas pesadas",
+    },
+    {
+      key: "eq_generico",
+      label: "Eq. (diversos)",
+      full: "Equipamento — Nome genérico (unificado)",
     },
     { key: "outros", label: "Outros (EQ)", full: "Equipamento — Outros" },
     { key: "container", label: "Contêiner", full: "Equipamento — Contêiner" },

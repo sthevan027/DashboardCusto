@@ -81,8 +81,21 @@ def norm_group(desc: str | None) -> str | None:
     return None
 
 
+def normalize_equip_subgroup_name(subgroup_name: str) -> str:
+    """Unifica singular/plural/typo ('Equipamento', 'Equipamentos', 'EquipamentoS') no mesmo subgrupo."""
+    s = subgroup_name.strip()
+    if not s or s == "—":
+        return s
+    nfd = unicodedata.normalize("NFD", s)
+    folded = "".join(c for c in nfd if unicodedata.category(c) != "Mn").lower()
+    compact = re.sub(r"\s+", "", folded)
+    if compact in ("equipamento", "equipamentos"):
+        return "Equipamentos (diversos)"
+    return s
+
+
 def normalize_subgroup(group: str, sub: str) -> str:
-    """Unifica só grafias de 'Mão de Obra' na coluna Sub-Grupo (não altera nomes de equipamento)."""
+    """Unifica grafias de 'Mão de Obra' e nomes genéricos duplicados em Equipamento."""
     s = (sub or "—").strip()
     if not s:
         s = "—"
@@ -95,6 +108,9 @@ def normalize_subgroup(group: str, sub: str) -> str:
         )
         if "mao" in folded and "de" in folded and "obra" in folded:
             return "Mão de Obra"
+        return s
+    if group == "Equipamento":
+        return normalize_equip_subgroup_name(s)
     return s
 
 

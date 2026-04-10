@@ -250,10 +250,10 @@ from merged m;
 create or replace view public.vw_cost_subgroup_summary
 with (security_invoker = true)
 as
-with sub_totals as (
+with by_raw_subgroup as (
   select
     g.name as group_name,
-    coalesce(sg.name, '—') as subgroup_name,
+    coalesce(sg.name, '—') as raw_subgroup_name,
     sum(v.planned_value)::numeric(14,2) as planned_value,
     sum(v.actual_value)::numeric(14,2) as actual_value
   from public.vw_cost_budget_line_unique v
@@ -262,6 +262,27 @@ with sub_totals as (
   join public.cost_groups g on g.id = i.group_id
   where g.name <> 'Total'
   group by g.name, coalesce(sg.name, '—')
+),
+sub_totals as (
+  select
+    br.group_name,
+    case
+      when br.group_name = 'Equipamento'
+        and regexp_replace(lower(trim(br.raw_subgroup_name)), '\s+', '', 'g') ~ '^(equipamento|equipamentos)$'
+      then 'Equipamentos (diversos)'
+      else br.raw_subgroup_name
+    end as subgroup_name,
+    sum(br.planned_value)::numeric(14,2) as planned_value,
+    sum(br.actual_value)::numeric(14,2) as actual_value
+  from by_raw_subgroup br
+  group by
+    br.group_name,
+    case
+      when br.group_name = 'Equipamento'
+        and regexp_replace(lower(trim(br.raw_subgroup_name)), '\s+', '', 'g') ~ '^(equipamento|equipamentos)$'
+      then 'Equipamentos (diversos)'
+      else br.raw_subgroup_name
+    end
 ),
 only_contract_sub as (
   select
@@ -433,7 +454,13 @@ select
   v.group_name,
   i.code as item_code,
   i.subgroup_id,
-  sg.name as subgroup_name,
+  case
+    when v.group_name = 'Equipamento'
+      and sg.name is not null
+      and regexp_replace(lower(trim(sg.name)), '\s+', '', 'g') ~ '^(equipamento|equipamentos)$'
+    then 'Equipamentos (diversos)'
+    else sg.name
+  end as subgroup_name,
   v.planned_value,
   v.actual_value,
   v.balance,

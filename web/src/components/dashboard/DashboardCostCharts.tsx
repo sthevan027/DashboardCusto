@@ -1,8 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
 import type { SubgroupRow } from "../../lib/dashboardTypes";
+import type { SubgroupChartBar } from "../../lib/dashboardSubgroupChartBuckets";
 import {
   buildCostDistributionTriplet,
   buildEquipmentHorizontalSeries,
+  buildMaterialHorizontalSeries,
 } from "../../lib/dashboardSubgroupChartBuckets";
 import { formatBRL, formatBRLAxis } from "../../lib/money";
 
@@ -213,10 +215,16 @@ function BarTrackCenterLabel({ value }: { value: number }) {
   );
 }
 
-function EquipmentHorizontalCard({
+type HorizontalBreakdownView = "equipment" | "material";
+
+function HorizontalCostBreakdownCard({
   rows,
+  view,
+  onViewChange,
 }: {
-  rows: ReturnType<typeof buildEquipmentHorizontalSeries>;
+  rows: SubgroupChartBar[];
+  view: HorizontalBreakdownView;
+  onViewChange: (v: HorizontalBreakdownView) => void;
 }) {
   /** Escala pelo maior valor entre previsto e realizado (evita eixo R$ 0–1). */
   const maxVal = useMemo(() => {
@@ -233,11 +241,44 @@ function EquipmentHorizontalCard({
     return [0, 0.25, 0.5, 0.75, 1].map((t) => t * maxVal);
   }, [maxVal]);
 
+  const title =
+    view === "equipment" ? "Custos por Equipamento" : "Custos por Material";
+
   return (
     <div className="flex h-full flex-col rounded-xl border border-(--border) bg-(--card) p-5 shadow-(--shadow-card)">
-      <h2 className="text-base font-semibold tracking-tight text-(--text)">
-        Custos por Equipamento
-      </h2>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h2 className="text-base font-semibold tracking-tight text-(--text)">
+          {title}
+        </h2>
+        <div
+          className="inline-flex shrink-0 rounded-lg border border-(--border) bg-black/25 p-0.5"
+          role="group"
+          aria-label="Alternar visão do gráfico"
+        >
+          <button
+            type="button"
+            onClick={() => onViewChange("equipment")}
+            className={
+              view === "equipment"
+                ? "rounded-md bg-white/10 px-3 py-1 text-xs font-medium text-(--text) shadow-sm ring-1 ring-white/10"
+                : "rounded-md px-3 py-1 text-xs font-medium text-(--muted) transition hover:text-(--text)"
+            }
+          >
+            Equipamento
+          </button>
+          <button
+            type="button"
+            onClick={() => onViewChange("material")}
+            className={
+              view === "material"
+                ? "rounded-md bg-white/10 px-3 py-1 text-xs font-medium text-(--text) shadow-sm ring-1 ring-white/10"
+                : "rounded-md px-3 py-1 text-xs font-medium text-(--muted) transition hover:text-(--text)"
+            }
+          >
+            Material
+          </button>
+        </div>
+      </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-(--muted)">
         <span className="inline-flex items-center gap-2">
           <span
@@ -258,7 +299,9 @@ function EquipmentHorizontalCard({
       <div className="mt-4 min-h-0 flex-1">
         {maxVal <= 0 ? (
           <p className="text-sm text-(--muted)">
-            Sem valores de equipamento para exibir.
+            {view === "equipment"
+              ? "Sem valores de equipamento para exibir."
+              : "Sem valores de materiais para exibir."}
           </p>
         ) : (
           <>
@@ -348,6 +391,9 @@ function EquipmentHorizontalCard({
 }
 
 export function DashboardCostCharts({ subgroups }: Props) {
+  const [horizontalView, setHorizontalView] =
+    useState<HorizontalBreakdownView>("equipment");
+
   const dist = useMemo(
     () => buildCostDistributionTriplet(subgroups),
     [subgroups],
@@ -358,9 +404,20 @@ export function DashboardCostCharts({ subgroups }: Props) {
     [subgroups],
   );
 
+  const materialRows = useMemo(
+    () => buildMaterialHorizontalSeries(subgroups),
+    [subgroups],
+  );
+
+  const horizontalRows =
+    horizontalView === "equipment" ? equipRows : materialRows;
+
   const hasAny =
     dist.mo + dist.eq + dist.mat > 0 ||
     equipRows.some(
+      (r) => Number(r.actual_value) > 0 || Number(r.planned_value) > 0,
+    ) ||
+    materialRows.some(
       (r) => Number(r.actual_value) > 0 || Number(r.planned_value) > 0,
     );
 
@@ -376,7 +433,11 @@ export function DashboardCostCharts({ subgroups }: Props) {
   return (
     <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
       <DistributionDonutCard mo={dist.mo} eq={dist.eq} mat={dist.mat} />
-      <EquipmentHorizontalCard rows={equipRows} />
+      <HorizontalCostBreakdownCard
+        rows={horizontalRows}
+        view={horizontalView}
+        onViewChange={setHorizontalView}
+      />
     </div>
   );
 }
