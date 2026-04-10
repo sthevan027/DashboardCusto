@@ -184,10 +184,6 @@ export function Lancamentos() {
         <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-(--text)">
           Lançamentos
         </h1>
-        <p className="mt-2 max-w-md text-sm leading-relaxed text-(--muted)">
-          Informe competência e valor. Você pode lançar em um item ou dividir o
-          valor pelo grupo, na proporção do orçamento.
-        </p>
       </header>
 
       {err && (
@@ -387,23 +383,6 @@ export function Lancamentos() {
                   required
                 />
               </div>
-            </div>
-            <div>
-              <label
-                htmlFor="lanc-desc"
-                className="text-sm font-medium text-(--text)"
-              >
-                Observação{" "}
-                <span className="font-normal text-(--muted)">(opcional)</span>
-              </label>
-              <input
-                id="lanc-desc"
-                type="text"
-                className={field}
-                placeholder="Ex.: nota fiscal, medição…"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
             </div>
           </div>
         </div>
