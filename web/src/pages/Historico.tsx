@@ -69,22 +69,26 @@ export function Historico() {
   const [deletingAuditId, setDeletingAuditId] = useState<number | null>(null);
   const [clearingAll, setClearingAll] = useState(false);
 
+  async function reloadRows() {
+    const { rows: next, error } = await fetchAuditRows();
+    if (error) {
+      setErr(error);
+      return;
+    }
+    setRows(next);
+  }
+
   useEffect(() => {
     (async () => {
       setErr(null);
-      const { rows: next, error } = await fetchAuditRows();
-      if (error) {
-        setErr(error);
-        setLoading(false);
-        return;
-      }
-      setRows(next);
+      await reloadRows();
       setLoading(false);
     })();
   }, []);
 
   /** Apenas o registo na tabela de auditoria — o custo já pode não existir. */
   async function handleRemoveAuditLine(r: EnrichedRow) {
+    const hasLinkedEntry = r.cost_id != null && r.action !== "DELETE";
     if (
       !confirm(
         "Remover esta linha do histórico? Ela deixa de aparecer aqui (é só o registo de auditoria na base de dados).",
@@ -94,10 +98,29 @@ export function Historico() {
     }
     setDeletingAuditId(r.id);
     setErr(null);
-    const { error } = await supabase
-      .from(T.cost_entries_audit)
-      .delete()
-      .eq("id", r.id);
+    let error: { message: string; code?: string } | null = null;
+
+    if (hasLinkedEntry) {
+      const { error: deleteEntryError } = await supabase
+        .from(T.cost_entries)
+        .delete()
+        .eq("id", r.cost_id!);
+      if (deleteEntryError) {
+        error = deleteEntryError;
+      } else {
+        const { error: deleteAuditError } = await supabase
+          .from(T.cost_entries_audit)
+          .delete()
+          .eq("cost_id", r.cost_id!);
+        if (deleteAuditError) error = deleteAuditError;
+      }
+    } else {
+      const { error: deleteAuditError } = await supabase
+        .from(T.cost_entries_audit)
+        .delete()
+        .eq("id", r.id);
+      if (deleteAuditError) error = deleteAuditError;
+    }
     setDeletingAuditId(null);
     if (error) {
       setErr(
@@ -107,13 +130,18 @@ export function Historico() {
       );
       return;
     }
-    const { rows: next, error: fetchErr } = await fetchAuditRows();
-    if (fetchErr) setErr(fetchErr);
-    else setRows(next);
+    await reloadRows();
   }
 
   async function handleClearAllAudit() {
     if (rows.length === 0) return;
+    const linkedCostIds = [
+      ...new Set(
+        rows
+          .filter((row) => row.cost_id != null && row.action !== "DELETE")
+          .map((row) => row.cost_id!),
+      ),
+    ];
     if (
       !confirm(
         `Apagar todos os ${rows.length} evento(s) do histórico de auditoria? Não altera orçamentos nem itens — só limpa esta lista.`,
@@ -123,10 +151,23 @@ export function Historico() {
     }
     setClearingAll(true);
     setErr(null);
-    const { error } = await supabase
-      .from(T.cost_entries_audit)
-      .delete()
-      .gte("id", 0);
+    let error: { message: string; code?: string } | null = null;
+
+    if (linkedCostIds.length > 0) {
+      const { error: deleteEntriesError } = await supabase
+        .from(T.cost_entries)
+        .delete()
+        .in("id", linkedCostIds);
+      if (deleteEntriesError) error = deleteEntriesError;
+    }
+
+    if (!error) {
+      const { error: deleteAuditError } = await supabase
+        .from(T.cost_entries_audit)
+        .delete()
+        .gte("id", 0);
+      if (deleteAuditError) error = deleteAuditError;
+    }
     setClearingAll(false);
     if (error) {
       setErr(
@@ -136,9 +177,7 @@ export function Historico() {
       );
       return;
     }
-    const { rows: next, error: fetchErr } = await fetchAuditRows();
-    if (fetchErr) setErr(fetchErr);
-    else setRows(next);
+    await reloadRows();
   }
 
   const filtered = useMemo(() => {
