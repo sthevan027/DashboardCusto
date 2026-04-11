@@ -86,18 +86,21 @@ export function Historico() {
     })();
   }, []);
 
-  /** Apenas o registo na tabela de auditoria — o custo já pode não existir. */
   async function handleRemoveAuditLine(r: EnrichedRow) {
     const hasLinkedEntry = r.cost_id != null && r.action !== "DELETE";
     if (
       !confirm(
-        "Remover esta linha do histórico? Ela deixa de aparecer aqui (é só o registo de auditoria na base de dados).",
+        hasLinkedEntry
+          ? "Apagar este lançamento? O valor será removido dos totais do dashboard e o histórico desse lançamento será limpo."
+          : "Remover esta linha do histórico? Ela deixa de aparecer aqui, sem alterar os totais atuais.",
       )
     ) {
       return;
     }
+
     setDeletingAuditId(r.id);
     setErr(null);
+
     let error: { message: string; code?: string } | null = null;
 
     if (hasLinkedEntry) {
@@ -105,6 +108,7 @@ export function Historico() {
         .from(T.cost_entries)
         .delete()
         .eq("id", r.cost_id!);
+
       if (deleteEntryError) {
         error = deleteEntryError;
       } else {
@@ -121,20 +125,24 @@ export function Historico() {
         .eq("id", r.id);
       if (deleteAuditError) error = deleteAuditError;
     }
+
     setDeletingAuditId(null);
+
     if (error) {
       setErr(
         error.message.includes("policy") || error.code === "42501"
-          ? "Sem permissão para apagar auditoria. Peça ao administrador a política RLS de delete em cost_entries_audit (ver Supabase/apply_audit_delete_policy.sql)."
+          ? "Sem permissão para apagar o lançamento ou a auditoria. Verifique as políticas RLS de delete em cost_entries e cost_entries_audit."
           : error.message,
       );
       return;
     }
+
     await reloadRows();
   }
 
   async function handleClearAllAudit() {
     if (rows.length === 0) return;
+
     const linkedCostIds = [
       ...new Set(
         rows
@@ -142,15 +150,20 @@ export function Historico() {
           .map((row) => row.cost_id!),
       ),
     ];
+
     if (
       !confirm(
-        `Apagar todos os ${rows.length} evento(s) do histórico de auditoria? Não altera orçamentos nem itens — só limpa esta lista.`,
+        linkedCostIds.length > 0
+          ? `Apagar todos os ${linkedCostIds.length} lançamento(s) e limpar os ${rows.length} evento(s) do histórico? Isso atualiza os valores do dashboard.`
+          : `Apagar todos os ${rows.length} evento(s) do histórico de auditoria? Isso só limpa esta lista.`,
       )
     ) {
       return;
     }
+
     setClearingAll(true);
     setErr(null);
+
     let error: { message: string; code?: string } | null = null;
 
     if (linkedCostIds.length > 0) {
@@ -168,15 +181,18 @@ export function Historico() {
         .gte("id", 0);
       if (deleteAuditError) error = deleteAuditError;
     }
+
     setClearingAll(false);
+
     if (error) {
       setErr(
         error.message.includes("policy") || error.code === "42501"
-          ? "Sem permissão para apagar auditoria. Execute o script Supabase/apply_audit_delete_policy.sql no projeto."
+          ? "Sem permissão para apagar os lançamentos ou a auditoria. Verifique as políticas RLS de delete em cost_entries e cost_entries_audit."
           : error.message,
       );
       return;
     }
+
     await reloadRows();
   }
 
@@ -289,6 +305,7 @@ export function Historico() {
           <tbody>
             {filtered.map((r) => {
               const amt = r.amount != null ? Number(r.amount) : null;
+              const deletesCurrentEntry = r.cost_id != null && r.action !== "DELETE";
 
               return (
                 <tr
@@ -336,8 +353,16 @@ export function Historico() {
                     <button
                       type="button"
                       className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-red-600 transition-colors hover:border-red-500/30 hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/15"
-                      title="Remover esta linha do histórico (auditoria)"
-                      aria-label="Remover esta linha do histórico"
+                      title={
+                        deletesCurrentEntry
+                          ? "Apagar este lançamento e atualizar os totais"
+                          : "Remover esta linha do histórico"
+                      }
+                      aria-label={
+                        deletesCurrentEntry
+                          ? "Apagar este lançamento e atualizar os totais"
+                          : "Remover esta linha do histórico"
+                      }
                       disabled={deletingAuditId === r.id || clearingAll}
                       onClick={() => void handleRemoveAuditLine(r)}
                     >

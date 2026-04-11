@@ -13,7 +13,7 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="visual" element={<Visual />} />
           <Route path="lancamentos" element={<Lancamentos />} />
-          <Route path="historico" element={<Historico />} />
+          <Route path="historico" element={< Historico />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
