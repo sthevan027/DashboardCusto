@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabase";
 import { getErrorMessage } from "../lib/supabaseError";
 import { formatBRL } from "../lib/money";
 import { normalizeStatus } from "../lib/statusLabels";
-import type { ActivityRow, GroupRow, SubgroupRow } from "../lib/dashboardTypes";
+import type { GroupRow, SubgroupRow } from "../lib/dashboardTypes";
 import { DashboardSkeleton } from "../components/dashboard/DashboardSkeleton";
 import { DashboardCostCharts } from "../components/dashboard/DashboardCostCharts";
 import {
@@ -84,8 +84,6 @@ function downloadCsv(
 export function Dashboard() {
   const [groups, setGroups] = useState<GroupRow[]>([]);
   const [subgroups, setSubgroups] = useState<SubgroupRow[]>([]);
-  const [activities, setActivities] = useState<ActivityRow[]>([]);
-  const [contractOnlyLines, setContractOnlyLines] = useState<ActivityRow[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadedAt, setLoadedAt] = useState<Date | null>(null);
@@ -130,15 +128,7 @@ export function Dashboard() {
         if (!ok) return;
         setGroups((g.data ?? []) as GroupRow[]);
         setSubgroups((sg.data ?? []) as SubgroupRow[]);
-        setActivities((a.data ?? []) as ActivityRow[]);
         setLoadedAt(new Date());
-
-        const co = await supabase
-          .from(V.cost_contract_only_items)
-          .select("*")
-          .order("item_code");
-        if (!co.error) setContractOnlyLines((co.data ?? []) as ActivityRow[]);
-        else setContractOnlyLines([]);
       } catch (e: unknown) {
         if (ok) setLoadError(getErrorMessage(e));
       } finally {
@@ -150,17 +140,15 @@ export function Dashboard() {
     };
   }, []);
 
-  const orphan611 = useMemo(() => {
-    const line = contractOnlyLines.find((l) => (l.item_code ?? "").trim() === "6.1.1");
-    return line ?? null;
-  }, [contractOnlyLines]);
-
   useEffect(() => {
     const id = window.setInterval(() => setNowTick(new Date()), 1000);
     return () => window.clearInterval(id);
   }, []);
 
-  const groupsMerged = useMemo(() => groups, [groups]);
+  const groupsMerged = useMemo(
+    () => groups.filter((g) => g.group_name !== "Outros (só no contrato)"),
+    [groups],
+  );
 
   /** Orçamento previsto por tópico — conforme `vw_cost_group_summary`. */
   const temporalForecastPlanned = useMemo((): TemporalForecastPlanned => {
@@ -191,21 +179,16 @@ export function Dashboard() {
     };
   }, [groupsMerged]);
 
-  const totalsContract = useMemo(() => {
-    let p = 0;
-    let ac = 0;
-    for (const r of activities) {
-      p += Number(r.planned_value);
-      ac += Number(r.actual_value);
-    }
-    const bal = p - ac;
-    return {
-      planned: p,
-      actual: ac,
-      balance: bal,
-      pct: p > 0 ? ac / p : null,
-    };
-  }, [activities]);
+  // Base contratual do Dashboard: só MO/EQ/MAT (sem "Outros (só no contrato)").
+  const totalsContract = useMemo(
+    () => ({
+      planned: totalsPrimary.planned,
+      actual: totalsPrimary.actual,
+      balance: totalsPrimary.balance,
+      pct: totalsPrimary.pct,
+    }),
+    [totalsPrimary],
+  );
 
   /**
    * KPIs do topo: previsto = contrato (grupo Total na planilha).
@@ -242,12 +225,14 @@ export function Dashboard() {
   }, [groupsMerged, q, statusFilter, topicFilter]);
 
   const filteredSubgroups = useMemo(() => {
-    let r = subgroupsAdjusted.filter(
-      (s) =>
-        !q ||
+    let r = subgroupsAdjusted.filter((s) => {
+      if (s.group_name === "Outros (só no contrato)") return false;
+      if (!q) return true;
+      return (
         s.group_name.toLowerCase().includes(q) ||
-        s.subgroup_name.toLowerCase().includes(q),
-    );
+        s.subgroup_name.toLowerCase().includes(q)
+      );
+    });
     if (statusFilter !== "all") {
       r = r.filter((s) => normalizeStatus(s.status) === statusFilter);
     }
@@ -288,15 +273,10 @@ export function Dashboard() {
     return copy;
   }, [filteredGroups, sortGroup]);
 
-  const groupTableRows = useMemo(() => {
-    const base = sortedGroups.filter((g) => g.group_name !== "Outros (só no contrato)");
-    const out: (
-      | { kind: "group"; row: GroupRow }
-      | { kind: "orphan611"; row: ActivityRow }
-    )[] = base.map((row) => ({ kind: "group" as const, row }));
-    if (orphan611) out.push({ kind: "orphan611" as const, row: orphan611 });
-    return out;
-  }, [sortedGroups, orphan611]);
+  const groupTableRows = useMemo(
+    () => sortedGroups.map((row) => ({ kind: "group" as const, row })),
+    [sortedGroups],
+  );
 
   const sortedSubgroups = useMemo(() => {
     const { col, asc } = sortSubgroup;
@@ -332,20 +312,14 @@ export function Dashboard() {
   }, [filteredSubgroups, sortSubgroup]);
 
   const footerGroups = useMemo(() => {
-    const base = sortedGroups.filter((g) => g.group_name !== "Outros (só no contrato)");
     let p = 0;
     let a = 0;
-    for (const r of base) {
+    for (const r of sortedGroups) {
       p += Number(r.planned_value);
       a += Number(r.actual_value);
     }
-    const oP = orphan611 ? Number(orphan611.planned_value) : 0;
-    const oA = orphan611 ? Number(orphan611.actual_value) : 0;
-    return {
-      without611: { planned: p, actual: a, balance: p - a },
-      with611: { planned: p + oP, actual: a + oA, balance: p + oP - (a + oA) },
-    };
-  }, [sortedGroups, orphan611]);
+    return { planned: p, actual: a, balance: p - a };
+  }, [sortedGroups]);
 
   const footerSubgroups = useMemo(() => {
     let p = 0;
@@ -375,28 +349,14 @@ export function Dashboard() {
     if (detailTab === "group") {
       const lines: (string | number)[][] = [];
       for (const e of groupTableRows) {
-        if (e.kind === "group") {
-          const r = e.row;
-          lines.push([
-            r.group_name,
-            formatBRL(r.planned_value),
-            formatBRL(r.actual_value),
-            formatBRL(r.balance),
-            r.percent_used != null
-              ? `${(Number(r.percent_used) * 100).toFixed(1)}%`
-              : "—",
-          ]);
-        } else {
-          const r = e.row;
-          const pct = pctOfPlanned(Number(r.planned_value));
-          lines.push([
-            `6.1.1 — ${r.item_name}`,
-            formatBRL(r.planned_value),
-            formatBRL(r.actual_value),
-            formatBRL(r.balance),
-            pct != null ? `${pct.toFixed(1)}%` : "—",
-          ]);
-        }
+        const r = e.row;
+        lines.push([
+          r.group_name,
+          formatBRL(r.planned_value),
+          formatBRL(r.actual_value),
+          formatBRL(r.balance),
+          r.percent_used != null ? `${(Number(r.percent_used) * 100).toFixed(1)}%` : "—",
+        ]);
       }
       downloadCsv(
         "dashboard-grupos.csv",
@@ -719,86 +679,40 @@ export function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {groupTableRows.map((e) =>
-                  e.kind === "group" ? (
-                    <tr
-                      key={e.row.group_name}
-                      className="border-b border-(--border) last:border-0"
-                    >
-                      <td className="px-3 py-2 font-medium">{e.row.group_name}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {formatBRL(e.row.planned_value)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {formatBRL(e.row.actual_value)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {formatBRL(e.row.balance)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {e.row.percent_used != null
-                          ? `${(Number(e.row.percent_used) * 100).toFixed(1)}%`
-                          : "—"}
-                      </td>
-                    </tr>
-                  ) : (
-                    <tr
-                      key={`orphan-6.1.1`}
-                      className="border-b border-(--border) bg-white/3 last:border-0"
-                    >
-                      <td className="px-3 py-2">
-                        <div className="flex flex-col">
-                          <span className="font-mono text-xs font-semibold text-(--accent)">
-                            6.1.1
-                          </span>
-                          <span className="text-sm leading-snug text-(--text)">
-                            {e.row.item_name}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {formatBRL(e.row.planned_value)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {formatBRL(e.row.actual_value)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {formatBRL(e.row.balance)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {(() => {
-                          const pct = pctOfPlanned(Number(e.row.planned_value));
-                          return pct != null ? `${pct.toFixed(1)}%` : "—";
-                        })()}
-                      </td>
-                    </tr>
-                  ),
-                )}
+                {groupTableRows.map((e) => (
+                  <tr
+                    key={e.row.group_name}
+                    className="border-b border-(--border) last:border-0"
+                  >
+                    <td className="px-3 py-2 font-medium">{e.row.group_name}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {formatBRL(e.row.planned_value)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {formatBRL(e.row.actual_value)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {formatBRL(e.row.balance)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {e.row.percent_used != null
+                        ? `${(Number(e.row.percent_used) * 100).toFixed(1)}%`
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
               <tfoot className="sticky bottom-0 z-10 border-t border-(--border) bg-(--table-footer-bg) font-medium">
                 <tr>
-                  <td className="px-4 py-3">Total (sem 6.1.1)</td>
+                  <td className="px-4 py-3">Total (visível)</td>
                   <td className="px-4 py-3 text-right tabular-nums">
-                    {formatBRL(footerGroups.without611.planned)}
+                    {formatBRL(footerGroups.planned)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
-                    {formatBRL(footerGroups.without611.actual)}
+                    {formatBRL(footerGroups.actual)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
-                    {formatBRL(footerGroups.without611.balance)}
-                  </td>
-                  <td className="px-4 py-3 text-right text-(--muted)">—</td>
-                </tr>
-                <tr className="border-t border-(--border)">
-                  <td className="px-4 py-3">Total (com 6.1.1)</td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {formatBRL(footerGroups.with611.planned)}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {formatBRL(footerGroups.with611.actual)}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {formatBRL(footerGroups.with611.balance)}
+                    {formatBRL(footerGroups.balance)}
                   </td>
                   <td className="px-4 py-3 text-right text-(--muted)">—</td>
                 </tr>
