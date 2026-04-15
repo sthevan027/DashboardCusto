@@ -17,6 +17,7 @@ const GROUP_ORDER: Record<string, number> = {
   'Mão de Obra': 0,
   Equipamento: 1,
   Materiais: 2,
+  Fornecimento: 3,
 }
 
 export function compareGroup(a: string, b: string): number {

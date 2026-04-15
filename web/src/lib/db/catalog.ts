@@ -4,6 +4,7 @@
  * Altere aqui e no schema SQL em conjunto.
  */
 export const T = {
+  app_profiles: 'app_profiles',
   cost_groups: 'cost_groups',
   cost_subgroups: 'cost_subgroups',
   cost_items: 'cost_items',

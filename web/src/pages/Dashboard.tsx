@@ -16,7 +16,12 @@ const CONTRACT_LABEL =
   (import.meta.env.VITE_CONTRACT_LABEL as string | undefined)?.trim() ||
   "Contrato";
 
-const MAIN_ECON_TOPICS = ["Mão de Obra", "Equipamento", "Materiais"] as const;
+const MAIN_ECON_TOPICS = [
+  "Mão de Obra",
+  "Equipamento",
+  "Materiais",
+  "Fornecimento",
+] as const;
 type TopicFilter = "all" | (typeof MAIN_ECON_TOPICS)[number] | "outros";
 
 function matchesTopicFilter(groupName: string, topic: TopicFilter): boolean {
@@ -160,6 +165,7 @@ export function Dashboard() {
       mo: pick("Mão de Obra"),
       eq: pick("Equipamento"),
       mat: pick("Materiais"),
+      forn: pick("Fornecimento"),
     };
   }, [groupsMerged]);
 
@@ -396,7 +402,6 @@ export function Dashboard() {
           className="rounded-xl border border-red-900/40 bg-red-950/50 px-4 py-3 text-sm text-red-100"
         >
           <p className="font-medium">Não foi possível carregar os dados</p>
-          <p className="mt-1 opacity-90">{loadError}</p>
         </div>
       )}
       <div className="flex flex-col gap-4 border-b border-(--border) pb-8 sm:flex-row sm:items-start sm:justify-between">
@@ -582,6 +587,7 @@ export function Dashboard() {
               <option value="Mão de Obra">Mão de Obra</option>
               <option value="Equipamento">Equipamento</option>
               <option value="Materiais">Materiais</option>
+              <option value="Fornecimento">Fornecimento</option>
               <option value="outros">Demais grupos</option>
             </select>
           </label>

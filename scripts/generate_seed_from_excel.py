@@ -45,6 +45,13 @@ EXCEL = REPO / "Excel" / "Controle Operacional V3.xlsx"
 OUT = REPO / "Supabase" / "seed.generated.sql"
 DEFAULT_SHEET = "Dados"
 
+GROUP_CODE_PREFIX: dict[str, str] = {
+    "Mão de Obra": "MO",
+    "Equipamento": "EQ",
+    "Materiais": "MAT",
+    "Fornecimento": "FOR",
+}
+
 
 def sql_str(s: str) -> str:
     return "'" + s.replace("'", "''") + "'"
@@ -82,6 +89,8 @@ def norm_group(desc: str | None) -> str | None:
         return "Equipamento"
     if u.startswith("MATERIAIS") or u == "MATERIAL":
         return "Materiais"
+    if u.startswith("FORNECIMENTO"):
+        return "Fornecimento"
     return None
 
 
@@ -127,7 +136,7 @@ def is_section_subtotal(b: str, c: str) -> bool:
     if b0 != c0:
         return False
     u = b0.upper()
-    return u in ("EQUIPAMENTOS", "MATERIAIS")
+    return u in ("EQUIPAMENTOS", "MATERIAIS", "FORNECIMENTOS")
 
 
 def slug_code(prefix: str, name: str, used: dict[str, int]) -> str:
@@ -278,6 +287,8 @@ def parse_dados(excel_path: Path, sheet_name: str) -> tuple[list[dict], dict[str
                     current["section"] = "Equipamento"
                 elif head == "MATERIAIS":
                     current["section"] = "Materiais"
+                elif head == "FORNECIMENTOS":
+                    current["section"] = "Fornecimento"
                 continue
 
             nb = norm_group(b_raw)
@@ -330,7 +341,11 @@ def build_subgroups(parents: list[dict]) -> list[tuple[str, str, str]]:
         for b in p["breakdown"]:
             gn = b["group"]
             sn = b["subgroup"]
-            pfx = {"Mão de Obra": "MO", "Equipamento": "EQ", "Materiais": "MAT"}[gn]
+            pfx = GROUP_CODE_PREFIX.get(gn)
+            if not pfx:
+                raise ValueError(
+                    f"Grupo não mapeado em GROUP_CODE_PREFIX: {gn!r}"
+                )
             add(gn, sn, pfx)
 
     out.sort(key=lambda x: (x[0], x[1]))
@@ -394,11 +409,10 @@ def generate() -> int:
 
     try:
         parents, sums = parse_dados(excel_path, args.sheet)
-    except KeyError as exc:
+        subgroups = build_subgroups(parents)
+    except (KeyError, ValueError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
-
-    subgroups = build_subgroups(parents)
 
     lines: list[str] = []
     w = lines.append
@@ -425,6 +439,7 @@ def generate() -> int:
     w("  ('Mão de Obra','MO'),")
     w("  ('Equipamento','EQ'),")
     w("  ('Materiais','MAT'),")
+    w("  ('Fornecimento','FOR'),")
     w("  ('Total','TOT')")
     w("on conflict (name) do nothing;")
     w("")
@@ -553,7 +568,7 @@ def generate() -> int:
     for p in parents:
         for b in p["breakdown"]:
             nm = item_breakdown_name(p["name"], b["display_label"])
-            pfx = {"Mão de Obra": "MO", "Equipamento": "EQ", "Materiais": "MAT"}[b["group"]]
+            pfx = GROUP_CODE_PREFIX[b["group"]]
             ext = f"SEED-V2-{pfx}-{p['code'].replace('.', '-')}-{ext_i}"
             ext_i += 1
             rows.append(

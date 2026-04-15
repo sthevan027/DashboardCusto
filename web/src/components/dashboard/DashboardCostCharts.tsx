@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import type { SubgroupRow } from "../../lib/dashboardTypes";
 import type { SubgroupChartBar } from "../../lib/dashboardSubgroupChartBuckets";
 import {
-  buildCostDistributionTriplet,
+  buildCostDistributionQuad,
   buildEquipmentHorizontalSeries,
   buildMaterialHorizontalSeries,
 } from "../../lib/dashboardSubgroupChartBuckets";
@@ -53,22 +53,45 @@ type DonutSeg = {
   colorVar: string;
 };
 
-function DistributionDonutCard({ mo, eq, mat }: { mo: number; eq: number; mat: number }) {
-  const total = mo + eq + mat;
+function DistributionDonutCard({
+  mo,
+  eq,
+  mat,
+  forn,
+}: {
+  mo: number;
+  eq: number;
+  mat: number;
+  forn: number;
+}) {
   const segments: DonutSeg[] = useMemo(
-    () => [
-      { id: "mo", label: "Mão de Obra", value: mo, colorVar: "var(--donut-mo)" },
-      { id: "eq", label: "Equipamento", value: eq, colorVar: "var(--donut-eq)" },
-      { id: "mat", label: "Materiais", value: mat, colorVar: "var(--donut-mat)" },
-    ],
-    [mo, eq, mat],
+    () => {
+      const raw: DonutSeg[] = [
+        { id: "mo", label: "Mão de Obra", value: mo, colorVar: "var(--donut-mo)" },
+        { id: "eq", label: "Equipamento", value: eq, colorVar: "var(--donut-eq)" },
+        { id: "mat", label: "Materiais", value: mat, colorVar: "var(--donut-mat)" },
+        {
+          id: "forn",
+          label: "Fornecimento",
+          value: forn,
+          colorVar: "var(--donut-forn)",
+        },
+      ];
+      return raw.filter((s) => s.value > 0);
+    },
+    [mo, eq, mat, forn],
+  );
+
+  const total = useMemo(
+    () => segments.reduce((s, x) => s + x.value, 0),
+    [segments],
   );
 
   const paths = useMemo(() => {
-    if (total <= 0) return [];
+    if (total <= 0 || segments.length === 0) return [];
     const innerR = R_MEAN - STROKE / 2;
     const outerR = R_MEAN + STROKE / 2;
-    const usable = 360 - 3 * GAP_DEG;
+    const usable = 360 - segments.length * GAP_DEG;
     let angle = -90;
     const out: { id: string; d: string; seg: DonutSeg; pct: number }[] = [];
     for (let i = 0; i < segments.length; i++) {
@@ -113,7 +136,7 @@ function DistributionDonutCard({ mo, eq, mat }: { mo: number; eq: number; mat: n
             className="h-auto w-full overflow-visible"
             style={{ shapeRendering: "geometricPrecision" }}
             role="img"
-            aria-label={`Distribuição: Mão de Obra ${formatBRL(mo)}, Equipamento ${formatBRL(eq)}, Materiais ${formatBRL(mat)}`}
+            aria-label={`Distribuição: ${segments.map((s) => `${s.label} ${formatBRL(s.value)}`).join("; ")}`}
           >
             <title>Distribuição de custos por grupo</title>
             {total <= 0 && (
@@ -395,7 +418,7 @@ export function DashboardCostCharts({ subgroups }: Props) {
     useState<HorizontalBreakdownView>("equipment");
 
   const dist = useMemo(
-    () => buildCostDistributionTriplet(subgroups),
+    () => buildCostDistributionQuad(subgroups),
     [subgroups],
   );
 
@@ -413,7 +436,7 @@ export function DashboardCostCharts({ subgroups }: Props) {
     horizontalView === "equipment" ? equipRows : materialRows;
 
   const hasAny =
-    dist.mo + dist.eq + dist.mat > 0 ||
+    dist.mo + dist.eq + dist.mat + dist.forn > 0 ||
     equipRows.some(
       (r) => Number(r.actual_value) > 0 || Number(r.planned_value) > 0,
     ) ||
@@ -432,7 +455,12 @@ export function DashboardCostCharts({ subgroups }: Props) {
 
   return (
     <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
-      <DistributionDonutCard mo={dist.mo} eq={dist.eq} mat={dist.mat} />
+      <DistributionDonutCard
+        mo={dist.mo}
+        eq={dist.eq}
+        mat={dist.mat}
+        forn={dist.forn}
+      />
       <HorizontalCostBreakdownCard
         rows={horizontalRows}
         view={horizontalView}

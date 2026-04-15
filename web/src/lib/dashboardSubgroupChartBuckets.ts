@@ -89,21 +89,24 @@ export function classifyMaterial(sub: string):
 }
 
 /** Soma prevista por grupo (para donut de distribuição). */
-export function buildCostDistributionTriplet(rows: SubgroupRow[]): {
+export function buildCostDistributionQuad(rows: SubgroupRow[]): {
   mo: number;
   eq: number;
   mat: number;
+  forn: number;
 } {
   let mo = 0;
   let eq = 0;
   let mat = 0;
+  let forn = 0;
   for (const r of rows) {
     const v = Number(r.planned_value);
     if (r.group_name === "Mão de Obra") mo += v;
     else if (r.group_name === "Equipamento") eq += v;
     else if (r.group_name === "Materiais") mat += v;
+    else if (r.group_name === "Fornecimento") forn += v;
   }
-  return { mo, eq, mat };
+  return { mo, eq, mat, forn };
 }
 
 function sortBarsByPlannedDesc(bars: SubgroupChartBar[]): SubgroupChartBar[] {
@@ -305,6 +308,32 @@ export function buildSubgroupChartSeries(rows: SubgroupRow[]): SubgroupChartBar[
       id: `mat-${d.key}`,
       label: d.label,
       fullLabel: d.full,
+      planned_value: s.p,
+      actual_value: s.a,
+    });
+  }
+
+  const fornRows = rows.filter((r) => r.group_name === "Fornecimento");
+  const byFornSub = new Map<string, SubgroupRow[]>();
+  for (const r of fornRows) {
+    const k = r.subgroup_name || "—";
+    const list = byFornSub.get(k);
+    if (list) list.push(r);
+    else byFornSub.set(k, [r]);
+  }
+  const fornSubs = [...byFornSub.entries()].sort(
+    (a, b) => sumPair(b[1]).p - sumPair(a[1]).p,
+  );
+  for (const [subName, subList] of fornSubs) {
+    const s = sumPair(subList);
+    const idSlug = fold(subName)
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 28);
+    out.push({
+      id: `for-${idSlug || "sub"}`,
+      label: subName.length > 24 ? `${subName.slice(0, 22)}…` : subName,
+      fullLabel: `Fornecimento — ${subName}`,
       planned_value: s.p,
       actual_value: s.a,
     });

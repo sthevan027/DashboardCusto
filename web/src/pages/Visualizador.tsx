@@ -171,7 +171,6 @@ export function Visual() {
   if (err && activities.length === 0) {
     return (
       <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-red-900 dark:bg-red-950/40">
-        {err}
       </div>
     );
   }

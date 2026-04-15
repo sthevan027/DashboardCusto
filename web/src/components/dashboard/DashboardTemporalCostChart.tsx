@@ -6,6 +6,7 @@ export type TemporalForecastPlanned = {
   mo: number;
   eq: number;
   mat: number;
+  forn: number;
 };
 
 type Props = {
@@ -23,6 +24,7 @@ type CumPoint = {
   mo: number;
   eq: number;
   mat: number;
+  forn: number;
   total: number;
 };
 
@@ -72,6 +74,7 @@ function buildForecastPoints(planned: TemporalForecastPlanned): CumPoint[] {
     const mo = planned.mo * s;
     const eq = planned.eq * s;
     const mat = planned.mat * s;
+    const forn = planned.forn * s;
     const mk = monthKeys[i]!;
     out.push({
       monthKey: mk,
@@ -79,7 +82,8 @@ function buildForecastPoints(planned: TemporalForecastPlanned): CumPoint[] {
       mo,
       eq,
       mat,
-      total: mo + eq + mat,
+      forn,
+      total: mo + eq + mat + forn,
     });
   }
   return out;
@@ -131,7 +135,7 @@ function areaPathUnder(
 
 export function DashboardTemporalCostChart({ planned }: Props) {
   const points = useMemo(() => {
-    const t = planned.mo + planned.eq + planned.mat;
+    const t = planned.mo + planned.eq + planned.mat + planned.forn;
     if (t <= 0) return [];
     return buildForecastPoints(planned);
   }, [planned]);
@@ -147,7 +151,7 @@ export function DashboardTemporalCostChart({ planned }: Props) {
   const maxY = useMemo(() => {
     let m = 0;
     for (const p of points) {
-      m = Math.max(m, p.mo, p.eq, p.mat);
+      m = Math.max(m, p.mo, p.eq, p.mat, p.forn);
     }
     return niceMaxYChart(m);
   }, [points]);
@@ -178,14 +182,24 @@ export function DashboardTemporalCostChart({ planned }: Props) {
         { key: "mo" as const, label: "Mão de Obra", stroke: "var(--donut-mo)" },
         { key: "eq" as const, label: "Equipamento", stroke: "var(--donut-eq)" },
         { key: "mat" as const, label: "Materiais", stroke: "var(--donut-mat)" },
+        {
+          key: "forn" as const,
+          label: "Fornecimento",
+          stroke: "var(--donut-forn)",
+        },
       ] as const,
     [],
   );
 
   const linePaths = useMemo(() => {
-    const out: Record<"mo" | "eq" | "mat", string> = { mo: "", eq: "", mat: "" };
+    const out: Record<"mo" | "eq" | "mat" | "forn", string> = {
+      mo: "",
+      eq: "",
+      mat: "",
+      forn: "",
+    };
     if (points.length === 0) return out;
-    for (const key of ["mo", "eq", "mat"] as const) {
+    for (const key of ["mo", "eq", "mat", "forn"] as const) {
       const pts: Pt[] = points.map((p, i) => ({
         x: xAt(i),
         y: yAt(p[key]),
@@ -272,7 +286,7 @@ export function DashboardTemporalCostChart({ planned }: Props) {
           viewBox={`0 0 ${VB_W} ${VB_H}`}
           className="h-auto w-full min-w-[min(100%,520px)]"
           role="img"
-          aria-label="Gráfico: evolução prevista acumulada por mês para Mão de Obra, Equipamento e Materiais"
+          aria-label="Gráfico: evolução prevista acumulada por mês por grupo (MO, EQ, MAT, Fornecimento)"
           onMouseMove={onSvgMove}
           onMouseLeave={hideTip}
         >
@@ -310,6 +324,17 @@ export function DashboardTemporalCostChart({ planned }: Props) {
             >
               <stop offset="0%" stopColor="var(--donut-mat)" stopOpacity="0.34" />
               <stop offset="100%" stopColor="var(--donut-mat)" stopOpacity="0" />
+            </linearGradient>
+            <linearGradient
+              id="temp-fill-forn"
+              gradientUnits="userSpaceOnUse"
+              x1="0"
+              y1={PAD_T}
+              x2="0"
+              y2={baseY}
+            >
+              <stop offset="0%" stopColor="var(--donut-forn)" stopOpacity="0.36" />
+              <stop offset="100%" stopColor="var(--donut-forn)" stopOpacity="0" />
             </linearGradient>
           </defs>
 
@@ -365,6 +390,7 @@ export function DashboardTemporalCostChart({ planned }: Props) {
             [
               ["mat", "url(#temp-fill-mat)"],
               ["eq", "url(#temp-fill-eq)"],
+              ["forn", "url(#temp-fill-forn)"],
               ["mo", "url(#temp-fill-mo)"],
             ] as const
           ).map(([key, fillUrl]) => {
@@ -442,6 +468,9 @@ export function DashboardTemporalCostChart({ planned }: Props) {
               </div>
               <div style={{ color: "var(--donut-mat)" }}>
                 Materiais: {formatBRL(tip.p.mat)}
+              </div>
+              <div style={{ color: "var(--donut-forn)" }}>
+                Fornecimento: {formatBRL(tip.p.forn)}
               </div>
               <div className="mt-1.5 border-t border-white/10 pt-1.5 font-semibold text-(--text)">
                 Total: {formatBRL(tip.p.total)}

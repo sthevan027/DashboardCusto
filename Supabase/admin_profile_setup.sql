@@ -1,0 +1,11 @@
+-- Depois de criar o usuário no Supabase (Authentication > Users > Add user),
+-- associe o UUID ao perfil de administrador. O e-mail pode ser fictício.
+--
+-- Só pode existir UM admin (índice idx_app_profiles_single_admin). Para trocar de
+-- conta admin, apague a linha antiga antes de inserir a nova:
+--
+-- delete from public.app_profiles;
+-- insert into public.app_profiles (id, role)
+-- values ('<uuid em auth.users>', 'admin');
+--
+-- Desative "Sign ups" públicos em Authentication > Providers se quiser só esta conta.

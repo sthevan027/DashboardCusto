@@ -72,6 +72,20 @@ create table if not exists public.cost_entries_audit (
   new_row jsonb null
 );
 
+-- Uma linha por usuário do Auth com permissão de escrita (inserida manualmente no SQL).
+create table if not exists public.app_profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  role text not null check (role = 'admin'),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_app_profiles_role on public.app_profiles(role);
+
+-- No máximo um administrador: todas as chaves (1) coincidem; UNIQUE permite só uma linha com role admin.
+create unique index if not exists idx_app_profiles_single_admin
+  on public.app_profiles ((1))
+  where (role = 'admin');
+
 create index if not exists idx_cost_subgroups_group_id on public.cost_subgroups(group_id);
 create index if not exists idx_cost_items_group_id on public.cost_items(group_id);
 create index if not exists idx_cost_items_subgroup_id on public.cost_items(subgroup_id);
@@ -216,7 +230,7 @@ only_contract as (
       select 1
       from public.cost_items i2
       join public.cost_groups g2 on g2.id = i2.group_id
-      where g2.name in ('Mão de Obra', 'Equipamento', 'Materiais')
+      where g2.name is distinct from 'Total'
         and (
           (i.code is not null and i2.code is not null and i2.code = i.code)
           or (i.code is null and i2.code is null and i2.name = i.name)
@@ -298,7 +312,7 @@ only_contract_sub as (
       select 1
       from public.cost_items i2
       join public.cost_groups g2 on g2.id = i2.group_id
-      where g2.name in ('Mão de Obra', 'Equipamento', 'Materiais')
+      where g2.name is distinct from 'Total'
         and (
           (i.code is not null and i2.code is not null and i2.code = i.code)
           or (i.code is null and i2.code is null and i2.name = i.name)
@@ -366,7 +380,7 @@ where g.name = 'Total'
     select 1
     from public.cost_items i2
     join public.cost_groups g2 on g2.id = i2.group_id
-    where g2.name in ('Mão de Obra', 'Equipamento', 'Materiais')
+    where g2.name is distinct from 'Total'
       and (
         (i.code is not null and i2.code is not null and i2.code = i.code)
         or (i.code is null and i2.code is null and i2.name = i.name)
@@ -471,22 +485,54 @@ join public.cost_items i on i.id = v.item_id
 left join public.cost_subgroups sg on sg.id = i.subgroup_id
 where v.group_name <> 'Total';
 
+create or replace function public.jl_is_cost_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.app_profiles p
+    where p.id = auth.uid()
+      and p.role = 'admin'
+  );
+$$;
+
+revoke all on function public.jl_is_cost_admin() from public;
+grant execute on function public.jl_is_cost_admin() to authenticated;
+
 alter table public.cost_groups enable row level security;
 alter table public.cost_subgroups enable row level security;
 alter table public.cost_items enable row level security;
 alter table public.cost_budgets enable row level security;
 alter table public.cost_entries enable row level security;
 alter table public.cost_entries_audit enable row level security;
+alter table public.app_profiles enable row level security;
 
 drop policy if exists "jl_anon_select_groups" on public.cost_groups;
 drop policy if exists "jl_anon_select_subgroups" on public.cost_subgroups;
 drop policy if exists "jl_anon_select_items" on public.cost_items;
 drop policy if exists "jl_anon_all_budgets" on public.cost_budgets;
+drop policy if exists "jl_anon_select_budgets" on public.cost_budgets;
+drop policy if exists "jl_budgets_ins_admin" on public.cost_budgets;
+drop policy if exists "jl_budgets_upd_admin" on public.cost_budgets;
+drop policy if exists "jl_budgets_del_admin" on public.cost_budgets;
 drop policy if exists "jl_anon_all_cost_entries" on public.cost_entries;
+drop policy if exists "jl_anon_select_cost_entries" on public.cost_entries;
+drop policy if exists "jl_entries_ins_admin" on public.cost_entries;
+drop policy if exists "jl_entries_upd_admin" on public.cost_entries;
+drop policy if exists "jl_entries_del_admin" on public.cost_entries;
 drop policy if exists "jl_anon_select_cost_entries_audit" on public.cost_entries_audit;
 drop policy if exists "jl_anon_insert_cost_entries_audit" on public.cost_entries_audit;
 drop policy if exists "jl_anon_delete_cost_entries_audit" on public.cost_entries_audit;
+drop policy if exists "jl_audit_sel_admin" on public.cost_entries_audit;
+drop policy if exists "jl_audit_ins_admin" on public.cost_entries_audit;
+drop policy if exists "jl_audit_del_admin" on public.cost_entries_audit;
 drop policy if exists "jl_anon_update_subgroups" on public.cost_subgroups;
+drop policy if exists "jl_subgroups_upd_admin" on public.cost_subgroups;
+drop policy if exists "jl_profile_sel_own" on public.app_profiles;
 
 create policy "jl_anon_select_groups"
   on public.cost_groups for select using (true);
@@ -497,23 +543,58 @@ create policy "jl_anon_select_subgroups"
 create policy "jl_anon_select_items"
   on public.cost_items for select using (true);
 
-create policy "jl_anon_all_budgets"
-  on public.cost_budgets for all using (true) with check (true);
+create policy "jl_anon_select_budgets"
+  on public.cost_budgets for select using (true);
 
-create policy "jl_anon_all_cost_entries"
-  on public.cost_entries for all using (true) with check (true);
+create policy "jl_budgets_ins_admin"
+  on public.cost_budgets for insert to authenticated
+  with check (public.jl_is_cost_admin());
 
-create policy "jl_anon_select_cost_entries_audit"
-  on public.cost_entries_audit for select using (true);
+create policy "jl_budgets_upd_admin"
+  on public.cost_budgets for update to authenticated
+  using (public.jl_is_cost_admin())
+  with check (public.jl_is_cost_admin());
 
-create policy "jl_anon_insert_cost_entries_audit"
-  on public.cost_entries_audit for insert with check (true);
+create policy "jl_budgets_del_admin"
+  on public.cost_budgets for delete to authenticated
+  using (public.jl_is_cost_admin());
 
-create policy "jl_anon_delete_cost_entries_audit"
-  on public.cost_entries_audit for delete using (true);
+create policy "jl_anon_select_cost_entries"
+  on public.cost_entries for select using (true);
 
-create policy "jl_anon_update_subgroups"
-  on public.cost_subgroups for update using (true) with check (true);
+create policy "jl_entries_ins_admin"
+  on public.cost_entries for insert to authenticated
+  with check (public.jl_is_cost_admin());
+
+create policy "jl_entries_upd_admin"
+  on public.cost_entries for update to authenticated
+  using (public.jl_is_cost_admin())
+  with check (public.jl_is_cost_admin());
+
+create policy "jl_entries_del_admin"
+  on public.cost_entries for delete to authenticated
+  using (public.jl_is_cost_admin());
+
+create policy "jl_audit_sel_admin"
+  on public.cost_entries_audit for select to authenticated
+  using (public.jl_is_cost_admin());
+
+create policy "jl_audit_ins_admin"
+  on public.cost_entries_audit for insert to authenticated
+  with check (public.jl_is_cost_admin());
+
+create policy "jl_audit_del_admin"
+  on public.cost_entries_audit for delete to authenticated
+  using (public.jl_is_cost_admin());
+
+create policy "jl_subgroups_upd_admin"
+  on public.cost_subgroups for update to authenticated
+  using (public.jl_is_cost_admin())
+  with check (public.jl_is_cost_admin());
+
+create policy "jl_profile_sel_own"
+  on public.app_profiles for select to authenticated
+  using (auth.uid() = id);
 
 grant usage on schema public to anon, authenticated;
 grant select on public.vw_cost_analysis to anon, authenticated;
@@ -526,6 +607,7 @@ grant select on public.vw_cost_monthly_total_actuals to anon, authenticated;
 grant select on public.vw_cost_item_lookup to anon, authenticated;
 grant select on public.vw_cost_visual_breakdown to anon, authenticated;
 grant select on public.vw_cost_subgroup_summary to anon, authenticated;
-grant select on public.vw_cost_audit_enriched to anon, authenticated;
+grant select on public.vw_cost_audit_enriched to authenticated;
 
-grant delete on table public.cost_entries_audit to anon, authenticated;
+grant select on table public.app_profiles to authenticated;
+grant delete on table public.cost_entries_audit to authenticated;
