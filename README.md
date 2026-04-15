@@ -41,9 +41,13 @@ O mesmo **`code`** pode existir no grupo **Total** e também em **Mão de Obra /
 
 ## Seed (`seed.generated.sql`)
 
-- **Fonte padrão**: `Excel/Controle Operacional V2.xlsx`, aba **Dados**.
+- **Fonte padrão**: `Excel/Controle Operacional V3.xlsx`, aba **Dados**.
 - **Grupo Total**: linhas pai — total previsto/real por código.
 - **Grupos MO/EQ/MAT**: quebra por subgrupo; nome do item costuma seguir o padrão `descrição — subgrupo`.
+
+Layout esperado na aba **Dados** (V3):
+
+- A=Itens, B=Descrição, C=Sub-Grupo, D=UNID., E=QUANT., F=Valor Unid., G=Valor total, H=Total Com BDI, I=VALOR REAL.
 
 Geração do seed:
 

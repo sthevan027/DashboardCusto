@@ -93,6 +93,8 @@ def normalize_equip_subgroup_name(subgroup_name: str) -> str:
     nfd = unicodedata.normalize("NFD", s)
     folded = "".join(c for c in nfd if unicodedata.category(c) != "Mn").lower()
     compact = re.sub(r"\s+", "", folded)
+    if compact in ("munk", "munck"):
+        return "Munck"
     if compact in ("equipamento", "equipamentos"):
         return "Equipamentos (diversos)"
     return s

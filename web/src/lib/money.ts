@@ -13,13 +13,14 @@ export function formatBRLAxis(n: number): string {
   const v = Math.abs(n);
   const sign = n < 0 ? "-" : "";
   if (v >= 1_000_000) {
-    return `${sign}R$ ${(v / 1_000_000).toLocaleString("pt-BR", {
+    // Símbolo "R$" pode ser truncado em telas estreitas; mantém compacto.
+    return `${sign}${(v / 1_000_000).toLocaleString("pt-BR", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })} mi`;
   }
   if (v >= 10_000) {
-    return `${sign}R$ ${(v / 1_000).toLocaleString("pt-BR", {
+    return `${sign}${(v / 1_000).toLocaleString("pt-BR", {
       minimumFractionDigits: 1,
       maximumFractionDigits: 1,
     })} mil`;

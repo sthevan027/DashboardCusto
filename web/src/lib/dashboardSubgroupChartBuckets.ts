@@ -48,7 +48,8 @@ export function classifyEquip(sub: string): EqBucketKey {
   const t = fold(sub);
   if (isGenericEquipSubgroupNameFolded(t)) return "eq_generico";
   if (t.includes("onibus") || t.includes("nibus")) return "onibus";
-  if (t.includes("munck")) return "munck";
+  // No Excel aparece como "Munk" (sem N) e às vezes como "Munck".
+  if (t.includes("munck") || t.includes("munk")) return "munck";
   if (t.includes("guindaste")) return "guindaste";
   if (t.includes("container") || (t.includes("cont") && t.includes("iner")))
     return "container";
@@ -75,6 +76,16 @@ function classifyMat(sub: string):
   if (t.includes("andaime")) return "andaime";
   if (t.includes("cacamba") || t.includes("cancamba")) return "cacamba";
   return "outros";
+}
+
+/** Classificação de Materiais por palavras-chave do subgrupo. */
+export function classifyMaterial(sub: string):
+  | "ferramental"
+  | "consumiveis"
+  | "andaime"
+  | "cacamba"
+  | "outros" {
+  return classifyMat(sub);
 }
 
 /** Soma prevista por grupo (para donut de distribuição). */
@@ -127,11 +138,6 @@ export function buildEquipmentHorizontalSeries(
       key: "maquinas",
       label: "Máquinas Pesadas",
       full: "Equipamento — Máquinas pesadas",
-    },
-    {
-      key: "eq_generico",
-      label: "Equipamentos (diversos)",
-      full: "Equipamento — Nome genérico (unificado)",
     },
     { key: "outros", label: "Outros", full: "Equipamento — Outros" },
     { key: "container", label: "Contêiner", full: "Equipamento — Contêiner" },
@@ -261,11 +267,6 @@ export function buildSubgroupChartSeries(rows: SubgroupRow[]): SubgroupChartBar[
       key: "maquinas",
       label: "Máq. pesadas",
       full: "Equipamento — Máquinas pesadas",
-    },
-    {
-      key: "eq_generico",
-      label: "Eq. (diversos)",
-      full: "Equipamento — Nome genérico (unificado)",
     },
     { key: "outros", label: "Outros (EQ)", full: "Equipamento — Outros" },
     { key: "container", label: "Contêiner", full: "Equipamento — Contêiner" },

@@ -307,7 +307,7 @@ function HorizontalCostBreakdownCard({
           <>
             <div className="mb-3 flex justify-between pl-29 text-[10px] tabular-nums text-(--muted) sm:text-xs">
               {ticks.map((v, i) => (
-                <span key={i} className="text-right">
+                <span key={i} className="max-w-18 truncate text-right">
                   {formatBRLAxis(v)}
                 </span>
               ))}

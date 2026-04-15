@@ -4,7 +4,6 @@ import { getErrorMessage } from "../lib/supabaseError";
 import { formatBRL } from "../lib/money";
 import { normalizeStatus } from "../lib/statusLabels";
 import type { ActivityRow, GroupRow, SubgroupRow } from "../lib/dashboardTypes";
-import { classifyEquip } from "../lib/dashboardSubgroupChartBuckets";
 import { DashboardSkeleton } from "../components/dashboard/DashboardSkeleton";
 import { DashboardCostCharts } from "../components/dashboard/DashboardCostCharts";
 import {
@@ -41,31 +40,11 @@ function KpiIconWrap({ children }: { children: ReactNode }) {
   );
 }
 
-/** Itens só no contrato: o que não é 6.1.1 soma em Mão de Obra; 6.1.1 vai para Equipamento → máquinas pesadas. */
-const MERGE_ORPHAN_INTO_GROUP = "Mão de Obra";
-const EQUIPAMENTO_GROUP = "Equipamento";
-const MAQUINAS_PESADAS_SUBGROUP = "Máquinas pesadas";
-const OUTROS_SO_CONTRATO = "Outros (só no contrato)";
-/** Item só no contrato (6.1.1), alocado em Equipamento / máquinas pesadas. */
-const DETAIL_ORPHAN_ITEM_CODE = "6.1.1";
+// Itens “só no contrato” permanecem separados em "Outros (só no contrato)".
 
-function isDetailOrphanItem(o: ActivityRow): boolean {
-  return (o.item_code ?? "").trim() === DETAIL_ORPHAN_ITEM_CODE;
-}
+// (buckets ficam nos gráficos; na aba Subgrupo mostramos tudo)
 
-function recalcGroupMetrics(
-  planned: number,
-  actual: number,
-): Pick<GroupRow, "balance" | "percent_used" | "status"> {
-  const balance = planned - actual;
-  const percent_used = planned > 0 ? actual / planned : null;
-  let status: string;
-  if (actual > planned) status = "OVERBUDGET";
-  else if (actual >= planned * 0.9) status = "HIGH_USAGE";
-  else if (actual >= planned * 0.7) status = "WARNING";
-  else status = "OK";
-  return { balance, percent_used, status };
-}
+// Métricas (saldo/%/status) vêm prontas das views do banco.
 
 type GroupSortCol =
   | "group_name"
@@ -158,11 +137,8 @@ export function Dashboard() {
           .from(V.cost_contract_only_items)
           .select("*")
           .order("item_code");
-        if (!co.error) {
-          setContractOnlyLines((co.data ?? []) as ActivityRow[]);
-        } else {
-          setContractOnlyLines([]);
-        }
+        if (!co.error) setContractOnlyLines((co.data ?? []) as ActivityRow[]);
+        else setContractOnlyLines([]);
       } catch (e: unknown) {
         if (ok) setLoadError(getErrorMessage(e));
       } finally {
@@ -174,92 +150,19 @@ export function Dashboard() {
     };
   }, []);
 
+  const orphan611 = useMemo(() => {
+    const line = contractOnlyLines.find((l) => (l.item_code ?? "").trim() === "6.1.1");
+    return line ?? null;
+  }, [contractOnlyLines]);
+
   useEffect(() => {
     const id = window.setInterval(() => setNowTick(new Date()), 1000);
     return () => window.clearInterval(id);
   }, []);
 
-  const groupsMerged = useMemo(() => {
-    const outrosRow = groups.find((g) => g.group_name === OUTROS_SO_CONTRATO);
-    const withoutOutros = groups.filter(
-      (g) => g.group_name !== OUTROS_SO_CONTRATO,
-    );
+  const groupsMerged = useMemo(() => groups, [groups]);
 
-    const sum611 = contractOnlyLines
-      .filter(isDetailOrphanItem)
-      .reduce(
-        (acc, o) => ({
-          p: acc.p + Number(o.planned_value),
-          a: acc.a + Number(o.actual_value),
-        }),
-        { p: 0, a: 0 },
-      );
-    const sumEx611 = contractOnlyLines
-      .filter((o) => !isDetailOrphanItem(o))
-      .reduce(
-        (acc, o) => ({
-          p: acc.p + Number(o.planned_value),
-          a: acc.a + Number(o.actual_value),
-        }),
-        { p: 0, a: 0 },
-      );
-
-    let addP_MO = 0;
-    let addA_MO = 0;
-    let addP_EQ = 0;
-    let addA_EQ = 0;
-
-    if (contractOnlyLines.length > 0) {
-      addP_MO = sumEx611.p;
-      addA_MO = sumEx611.a;
-      addP_EQ = sum611.p;
-      addA_EQ = sum611.a;
-    } else if (outrosRow) {
-      addP_MO = Number(outrosRow.planned_value);
-      addA_MO = Number(outrosRow.actual_value);
-    }
-
-    if (
-      addP_MO === 0 &&
-      addA_MO === 0 &&
-      addP_EQ === 0 &&
-      addA_EQ === 0
-    ) {
-      return withoutOutros;
-    }
-
-    return withoutOutros.map((g) => {
-      if (g.group_name === MERGE_ORPHAN_INTO_GROUP) {
-        const p = Number(g.planned_value) + addP_MO;
-        const a = Number(g.actual_value) + addA_MO;
-        const m = recalcGroupMetrics(p, a);
-        return {
-          ...g,
-          planned_value: p,
-          actual_value: a,
-          balance: m.balance,
-          percent_used: m.percent_used,
-          status: m.status,
-        };
-      }
-      if (g.group_name === EQUIPAMENTO_GROUP && addP_EQ + addA_EQ > 0) {
-        const p = Number(g.planned_value) + addP_EQ;
-        const a = Number(g.actual_value) + addA_EQ;
-        const m = recalcGroupMetrics(p, a);
-        return {
-          ...g,
-          planned_value: p,
-          actual_value: a,
-          balance: m.balance,
-          percent_used: m.percent_used,
-          status: m.status,
-        };
-      }
-      return g;
-    });
-  }, [groups, contractOnlyLines]);
-
-  /** Orçamento previsto por tópico — alinhado aos KPIs por grupo (inclui 6.1.1 em Equipamento). */
+  /** Orçamento previsto por tópico — conforme `vw_cost_group_summary`. */
   const temporalForecastPlanned = useMemo((): TemporalForecastPlanned => {
     const pick = (name: string) =>
       Number(
@@ -320,96 +223,14 @@ export function Dashboard() {
     };
   }, [totalsContract.planned, totalsPrimary.actual]);
 
-  /**
-   * Item 6.1.1 (só contrato) sai do subgrupo Mão de Obra e entra em
-   * Equipamento → máquinas pesadas.
-   */
-  const subgroupsAdjusted = useMemo(() => {
-    const line = contractOnlyLines.find(isDetailOrphanItem);
-    if (!line) return subgroups;
-
-    const tP = Number(line.planned_value);
-    const tA = Number(line.actual_value);
-
-    const patch = (row: SubgroupRow, p: number, a: number): SubgroupRow => {
-      const m = recalcGroupMetrics(p, a);
-      return {
-        ...row,
-        planned_value: p,
-        actual_value: a,
-        balance: m.balance,
-        percent_used: m.percent_used,
-        status: m.status,
-      };
-    };
-
-    const list = subgroups.map((s) => {
-      if (
-        s.group_name === MERGE_ORPHAN_INTO_GROUP &&
-        s.subgroup_name === MERGE_ORPHAN_INTO_GROUP
-      ) {
-        const np = Math.max(0, Number(s.planned_value) - tP);
-        const na = Math.max(0, Number(s.actual_value) - tA);
-        return patch(s, np, na);
-      }
-      return s;
-    });
-
-    const idx = list.findIndex(
-      (s) =>
-        s.group_name === EQUIPAMENTO_GROUP &&
-        classifyEquip(s.subgroup_name) === "maquinas",
-    );
-
-    if (idx >= 0) {
-      const s = list[idx]!;
-      return list.map((row, i) =>
-        i === idx
-          ? patch(
-              s,
-              Number(s.planned_value) + tP,
-              Number(s.actual_value) + tA,
-            )
-          : row,
-      );
-    }
-
-    const m = recalcGroupMetrics(tP, tA);
-    return [
-      ...list,
-      {
-        group_name: EQUIPAMENTO_GROUP,
-        subgroup_name: MAQUINAS_PESADAS_SUBGROUP,
-        planned_value: tP,
-        actual_value: tA,
-        balance: m.balance,
-        percent_used: m.percent_used,
-        status: line.status ?? m.status,
-      } as SubgroupRow,
-    ];
-  }, [subgroups, contractOnlyLines]);
+  const subgroupsAdjusted = useMemo(() => subgroups, [subgroups]);
 
   const q = filterQuery.trim().toLowerCase();
 
   const filteredGroups = useMemo(() => {
     let r = groupsMerged.filter((g) => {
       if (!q) return true;
-      if (g.group_name.toLowerCase().includes(q)) return true;
-      if (g.group_name === MERGE_ORPHAN_INTO_GROUP) {
-        const row = contractOnlyLines.find(isDetailOrphanItem);
-        if (!row) return false;
-        const code = (row.item_code ?? "").toLowerCase();
-        const name = row.item_name.toLowerCase();
-        return code.includes(q) || name.includes(q);
-      }
-      if (g.group_name === EQUIPAMENTO_GROUP) {
-        const row = contractOnlyLines.find(isDetailOrphanItem);
-        if (!row) return false;
-        const code = (row.item_code ?? "").toLowerCase();
-        const name = row.item_name.toLowerCase();
-        return code.includes(q) || name.includes(q);
-      }
-      return false;
+      return g.group_name.toLowerCase().includes(q);
     });
     if (statusFilter !== "all") {
       r = r.filter((g) => normalizeStatus(g.status) === statusFilter);
@@ -418,7 +239,7 @@ export function Dashboard() {
       r = r.filter((g) => matchesTopicFilter(g.group_name, topicFilter));
     }
     return r;
-  }, [groupsMerged, q, statusFilter, topicFilter, contractOnlyLines]);
+  }, [groupsMerged, q, statusFilter, topicFilter]);
 
   const filteredSubgroups = useMemo(() => {
     let r = subgroupsAdjusted.filter(
@@ -467,39 +288,15 @@ export function Dashboard() {
     return copy;
   }, [filteredGroups, sortGroup]);
 
-  const orphan611ForTable = useMemo(() => {
-    let r = contractOnlyLines.filter(isDetailOrphanItem);
-    if (statusFilter !== "all") {
-      r = r.filter((o) => normalizeStatus(o.status) === statusFilter);
-    }
-    if (q) {
-      r = r.filter((o) => {
-        const code = (o.item_code ?? "").toLowerCase();
-        const name = o.item_name.toLowerCase();
-        return code.includes(q) || name.includes(q);
-      });
-    }
-    return r;
-  }, [contractOnlyLines, q, statusFilter]);
-
   const groupTableRows = useMemo(() => {
-    type Entry =
+    const base = sortedGroups.filter((g) => g.group_name !== "Outros (só no contrato)");
+    const out: (
       | { kind: "group"; row: GroupRow }
-      | { kind: "orphan611"; row: ActivityRow };
-    const out: Entry[] = [];
-    for (const g of sortedGroups) {
-      out.push({ kind: "group", row: g });
-      if (
-        g.group_name === EQUIPAMENTO_GROUP &&
-        orphan611ForTable.length > 0
-      ) {
-        for (const o of orphan611ForTable) {
-          out.push({ kind: "orphan611", row: o });
-        }
-      }
-    }
+      | { kind: "orphan611"; row: ActivityRow }
+    )[] = base.map((row) => ({ kind: "group" as const, row }));
+    if (orphan611) out.push({ kind: "orphan611" as const, row: orphan611 });
     return out;
-  }, [sortedGroups, orphan611ForTable]);
+  }, [sortedGroups, orphan611]);
 
   const sortedSubgroups = useMemo(() => {
     const { col, asc } = sortSubgroup;
@@ -535,14 +332,20 @@ export function Dashboard() {
   }, [filteredSubgroups, sortSubgroup]);
 
   const footerGroups = useMemo(() => {
+    const base = sortedGroups.filter((g) => g.group_name !== "Outros (só no contrato)");
     let p = 0;
     let a = 0;
-    for (const r of sortedGroups) {
+    for (const r of base) {
       p += Number(r.planned_value);
       a += Number(r.actual_value);
     }
-    return { planned: p, actual: a, balance: p - a };
-  }, [sortedGroups]);
+    const oP = orphan611 ? Number(orphan611.planned_value) : 0;
+    const oA = orphan611 ? Number(orphan611.actual_value) : 0;
+    return {
+      without611: { planned: p, actual: a, balance: p - a },
+      with611: { planned: p + oP, actual: a + oA, balance: p + oP - (a + oA) },
+    };
+  }, [sortedGroups, orphan611]);
 
   const footerSubgroups = useMemo(() => {
     let p = 0;
@@ -585,14 +388,13 @@ export function Dashboard() {
           ]);
         } else {
           const r = e.row;
+          const pct = pctOfPlanned(Number(r.planned_value));
           lines.push([
-            `↳ ${r.item_code ?? "—"} — ${r.item_name}`,
+            `6.1.1 — ${r.item_name}`,
             formatBRL(r.planned_value),
             formatBRL(r.actual_value),
             formatBRL(r.balance),
-            r.percent_used != null
-              ? `${(Number(r.percent_used) * 100).toFixed(1)}%`
-              : "—",
+            pct != null ? `${pct.toFixed(1)}%` : "—",
           ]);
         }
       }
@@ -923,9 +725,7 @@ export function Dashboard() {
                       key={e.row.group_name}
                       className="border-b border-(--border) last:border-0"
                     >
-                      <td className="px-3 py-2 font-medium">
-                        {e.row.group_name}
-                      </td>
+                      <td className="px-3 py-2 font-medium">{e.row.group_name}</td>
                       <td className="px-3 py-2 text-right tabular-nums">
                         {formatBRL(e.row.planned_value)}
                       </td>
@@ -943,40 +743,33 @@ export function Dashboard() {
                     </tr>
                   ) : (
                     <tr
-                      key={`orphan-${e.row.item_id}`}
-                      className="border-b border-(--border) last:border-0"
+                      key={`orphan-6.1.1`}
+                      className="border-b border-(--border) bg-white/3 last:border-0"
                     >
                       <td className="px-3 py-2">
-                        <div className="ml-2 flex items-start gap-2.5 border-l-2 border-(--donut-eq)/45 pl-3">
-                          <span
-                            className="mt-1.5 size-2 shrink-0 rounded-full bg-(--donut-eq) shadow-[0_0_10px_rgba(45,212,191,0.35)]"
-                            aria-hidden
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                              <span className="font-mono text-xs font-semibold text-(--accent)">
-                                {e.row.item_code ?? "—"}
-                              </span>
-                              <span className="text-sm leading-snug text-(--text)">
-                                {e.row.item_name}
-                              </span>
-                            </div>
-                          </div>
+                        <div className="flex flex-col">
+                          <span className="font-mono text-xs font-semibold text-(--accent)">
+                            6.1.1
+                          </span>
+                          <span className="text-sm leading-snug text-(--text)">
+                            {e.row.item_name}
+                          </span>
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-(--muted)">
+                      <td className="px-3 py-2 text-right tabular-nums">
                         {formatBRL(e.row.planned_value)}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-(--muted)">
+                      <td className="px-3 py-2 text-right tabular-nums">
                         {formatBRL(e.row.actual_value)}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-(--muted)">
+                      <td className="px-3 py-2 text-right tabular-nums">
                         {formatBRL(e.row.balance)}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-(--muted)">
-                        {e.row.percent_used != null
-                          ? `${(Number(e.row.percent_used) * 100).toFixed(1)}%`
-                          : "—"}
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {(() => {
+                          const pct = pctOfPlanned(Number(e.row.planned_value));
+                          return pct != null ? `${pct.toFixed(1)}%` : "—";
+                        })()}
                       </td>
                     </tr>
                   ),
@@ -984,15 +777,28 @@ export function Dashboard() {
               </tbody>
               <tfoot className="sticky bottom-0 z-10 border-t border-(--border) bg-(--table-footer-bg) font-medium">
                 <tr>
-                  <td className="px-4 py-3">Total (visível)</td>
+                  <td className="px-4 py-3">Total (sem 6.1.1)</td>
                   <td className="px-4 py-3 text-right tabular-nums">
-                    {formatBRL(footerGroups.planned)}
+                    {formatBRL(footerGroups.without611.planned)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
-                    {formatBRL(footerGroups.actual)}
+                    {formatBRL(footerGroups.without611.actual)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
-                    {formatBRL(footerGroups.balance)}
+                    {formatBRL(footerGroups.without611.balance)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-(--muted)">—</td>
+                </tr>
+                <tr className="border-t border-(--border)">
+                  <td className="px-4 py-3">Total (com 6.1.1)</td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {formatBRL(footerGroups.with611.planned)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {formatBRL(footerGroups.with611.actual)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {formatBRL(footerGroups.with611.balance)}
                   </td>
                   <td className="px-4 py-3 text-right text-(--muted)">—</td>
                 </tr>

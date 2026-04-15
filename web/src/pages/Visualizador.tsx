@@ -38,6 +38,8 @@ export function Visual() {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [onlyWithDiff, setOnlyWithDiff] = useState(false);
 
   const byCode = useMemo(() => {
     const m = new Map<string, Breakdown[]>();
@@ -55,6 +57,23 @@ export function Visual() {
     }
     return m;
   }, [breakdown]);
+
+  const q = query.trim().toLowerCase();
+
+  const filteredActivities = useMemo(() => {
+    let r = activities;
+    if (q) {
+      r = r.filter((a) => {
+        const code = (a.item_code ?? "").toLowerCase();
+        const name = a.item_name.toLowerCase();
+        return code.includes(q) || name.includes(q);
+      });
+    }
+    if (onlyWithDiff) {
+      r = r.filter((a) => Math.abs(Number(a.planned_value) - Number(a.actual_value)) >= 0.01);
+    }
+    return r;
+  }, [activities, q, onlyWithDiff]);
 
   const load = useCallback(async () => {
     setErr(null);
@@ -140,7 +159,13 @@ export function Visual() {
   }
 
   if (loading) {
-    return <p className="text-(--muted)">Carregando planilha…</p>;
+    return (
+      <div className="space-y-4">
+        <div className="h-8 w-64 animate-pulse rounded bg-(--border)" />
+        <div className="h-10 w-full animate-pulse rounded bg-(--border)" />
+        <p className="text-sm text-(--muted)">Carregando dados…</p>
+      </div>
+    );
   }
 
   if (err && activities.length === 0) {
@@ -153,8 +178,38 @@ export function Visual() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Visualização de Dados</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-(--text)">
+            Visualizador
+          </h1>
+          <p className="mt-1 text-sm text-(--muted)">
+            Ajuste rápido de previsto/real e nomes de subgrupo por item.
+          </p>
+        </div>
+
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <div className="relative w-full sm:w-92">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar por código ou descrição…"
+              className="w-full rounded-lg border border-(--border) bg-(--input-bg) px-3 py-2 text-sm text-(--text) shadow-sm outline-none placeholder:text-(--muted) focus:ring-2 focus:ring-(--ring)"
+            />
+          </div>
+          <label className="inline-flex items-center gap-2 text-sm text-(--text)">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-blue-600"
+              checked={onlyWithDiff}
+              onChange={(e) => setOnlyWithDiff(e.target.checked)}
+            />
+            Só com diferença
+          </label>
+          <div className="text-xs tabular-nums text-(--muted) sm:text-right">
+            {filteredActivities.length}/{activities.length}
+          </div>
+        </div>
       </div>
 
       {err && (
@@ -164,7 +219,7 @@ export function Visual() {
       )}
 
       <div className="space-y-10 overflow-x-auto">
-        {activities.map((act) => {
+        {filteredActivities.map((act) => {
           const code = act.item_code ?? "";
           const rows = byCode.get(code) ?? [];
           return (
