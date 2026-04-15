@@ -10,9 +10,12 @@ Requer: pip install openpyxl
 
 Regras:
 - Linhas pai (coluna A = código): Total previsto/real -> grupo Total, item = descrição do pai.
-- Filhas: col. B pode ser seção (MÃO DE OBRA / EQUIPAMENTOS / MATERIAIS) ou detalhe (ex.: tipo de
-  equipamento); col. C = Sub-Grupo. Subtotais B=C=EQUIPAMENTOS ou MATERIAIS/MATERIAIS são ignorados
-  na soma, mas atualizam a seção ativa para as linhas seguintes.
+- Filhas: col. B pode ser seção (MÃO DE OBRA / EQUIPAMENTOS / MATERIAIS / FORNECIMENTO(S)) ou detalhe;
+  col. C = Sub-Grupo. Subtotais B=C (ex.: EQUIPAMENTOS|EQUIPAMENTOS) atualizam a seção ativa.
+- Fornecimento é um grupo distinto de Materiais no banco. Antes das linhas de Fornecimento (Elétrico,
+  Mecânico, …) deve existir uma quebra: linha com B reconhecido como FORNECIMENTO (ver norm_group) ou
+  subtotal B=C em FORNECIMENTO(S). Caso contrário, as linhas seguem o último grupo ativo (ex.: ainda
+  Materiais) e serão classificadas errado.
 - Nome no banco: "{descrição pai} — {subgrupo}" (único por grupo; sufixo se colidir).
 - Totais na aba Controle podem diferir da soma em Dados; o seed segue a aba Dados.
 """
@@ -78,7 +81,10 @@ def as_float(value: Any) -> float:
 
 
 def norm_group(desc: str | None) -> str | None:
-    """Só trata como seção MO/EQ/MAT linhas que são rótulos (não descrições longas)."""
+    """Só trata como seção MO/EQ/MAT/FORN linhas que são rótulos (não descrições longas).
+
+    Fornecimento é avaliado antes de Materiais: evita confundir rótulos que mencionem ambos.
+    """
     if not desc:
         return None
     t = str(desc).strip()
@@ -87,10 +93,11 @@ def norm_group(desc: str | None) -> str | None:
         return "Mão de Obra"
     if u.startswith("EQUIPAMENTO"):
         return "Equipamento"
-    if u.startswith("MATERIAIS") or u == "MATERIAL":
-        return "Materiais"
+    # Antes de MATERIAIS: "Fornecimento de …" / "FORNECIMENTO ELÉTRICO" etc. ficam no grupo Fornecimento.
     if u.startswith("FORNECIMENTO"):
         return "Fornecimento"
+    if u.startswith("MATERIAIS") or u == "MATERIAL":
+        return "Materiais"
     return None
 
 
@@ -130,13 +137,18 @@ def normalize_subgroup(group: str, sub: str) -> str:
 
 
 def is_section_subtotal(b: str, c: str) -> bool:
-    """Subtotal quando B e C são a mesma célula (ex.: EQUIPAMENTOS|EQUIPAMENTOS), não B=EQUIPAMENTOS C=Equipamentos."""
+    """Subtotal quando B e C são iguais (ex.: FORNECIMENTOS|FORNECIMENTOS). Atualiza só a seção."""
     b0 = str(b).strip()
     c0 = str(c).strip()
     if b0 != c0:
         return False
     u = b0.upper()
-    return u in ("EQUIPAMENTOS", "MATERIAIS", "FORNECIMENTOS")
+    return u in (
+        "EQUIPAMENTOS",
+        "MATERIAIS",
+        "FORNECIMENTOS",
+        "FORNECIMENTO",
+    )
 
 
 def slug_code(prefix: str, name: str, used: dict[str, int]) -> str:
@@ -287,7 +299,7 @@ def parse_dados(excel_path: Path, sheet_name: str) -> tuple[list[dict], dict[str
                     current["section"] = "Equipamento"
                 elif head == "MATERIAIS":
                     current["section"] = "Materiais"
-                elif head == "FORNECIMENTOS":
+                elif head in ("FORNECIMENTOS", "FORNECIMENTO"):
                     current["section"] = "Fornecimento"
                 continue
 

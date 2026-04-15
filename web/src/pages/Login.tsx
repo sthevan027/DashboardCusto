@@ -56,7 +56,6 @@ export function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   if (!loading && session && isAdmin) {
@@ -65,18 +64,15 @@ export function Login() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setErr(null);
     setPending(true);
     const { error } = await signIn(email, password);
     if (error) {
       setPending(false);
-      setErr();
       return;
     }
     const { data: userData, error: userErr } = await supabase.auth.getUser();
     if (userErr || !userData.user) {
       setPending(false);
-      setErr();
       await signOut();
       return;
     }
@@ -87,7 +83,6 @@ export function Login() {
       .maybeSingle();
     setPending(false);
     if (profErr || prof?.role !== "admin") {
-      setErr();
       await signOut();
       return;
     }
@@ -156,11 +151,6 @@ export function Login() {
               </button>
             </div>
           </label>
-          {err && (
-            <p className="text-sm text-red-600 dark:text-red-400" role="alert">
-              {err}
-            </p>
-          )}
           <button
             type="submit"
             disabled={pending}
