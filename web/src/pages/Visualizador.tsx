@@ -195,11 +195,6 @@ export function Visual() {
               </span>
             )}
           </div>
-          <p className="mt-1 text-sm text-(--muted)">
-            {canEdit
-              ? "Ajuste rápido de previsto/real e nomes de subgrupo por item."
-              : "Consulta dos totais previstos e reais e dos subgrupos por item. Alterações só para administrador."}
-          </p>
         </div>
 
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
