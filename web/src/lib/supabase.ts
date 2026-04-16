@@ -9,4 +9,14 @@ if (!url || !anon) {
   )
 }
 
-export const supabase = createClient(url ?? '', anon ?? '')
+export const supabase = createClient(url ?? '', anon ?? '', {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storage:
+      typeof globalThis !== "undefined" && "localStorage" in globalThis
+        ? globalThis.localStorage
+        : undefined,
+  },
+})

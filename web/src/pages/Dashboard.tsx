@@ -4,6 +4,7 @@ import { getErrorMessage } from "../lib/supabaseError";
 import { formatBRL } from "../lib/money";
 import { normalizeStatus } from "../lib/statusLabels";
 import type { GroupRow, SubgroupRow } from "../lib/dashboardTypes";
+import { mergeSubgroupRowsCaseInsensitive } from "../lib/mergeSubgroups";
 import { DashboardSkeleton } from "../components/dashboard/DashboardSkeleton";
 import { DashboardCostCharts } from "../components/dashboard/DashboardCostCharts";
 import {
@@ -212,7 +213,10 @@ export function Dashboard() {
     };
   }, [totalsContract.planned, totalsPrimary.actual]);
 
-  const subgroupsAdjusted = useMemo(() => subgroups, [subgroups]);
+  const subgroupsAdjusted = useMemo(
+    () => mergeSubgroupRowsCaseInsensitive(subgroups),
+    [subgroups],
+  );
 
   const q = filterQuery.trim().toLowerCase();
 

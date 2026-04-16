@@ -1,4 +1,8 @@
 import type { SubgroupRow } from "./dashboardTypes";
+import {
+  foldSubgroupKey,
+  formatSubgroupLabelForDisplay,
+} from "./mergeSubgroups";
 
 export type SubgroupChartBar = {
   id: string;
@@ -10,29 +14,6 @@ export type SubgroupChartBar = {
   actual_value: number;
 };
 
-export type EqBucketKey =
-  | "onibus"
-  | "carros"
-  | "guindaste"
-  | "munck"
-  | "maquinas"
-  | "container"
-  | "eq_generico"
-  | "outros";
-
-function fold(s: string): string {
-  return s
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
-
-/** Subgrupo só com o nome genérico (singular/plural), ex.: "Equipamento" vs "Equipamentos". */
-function isGenericEquipSubgroupNameFolded(t: string): boolean {
-  const compact = t.replace(/\s+/g, "");
-  return /^(equipamento|equipamentos)$/.test(compact);
-}
-
 function sumPair(rows: SubgroupRow[]): { p: number; a: number } {
   let p = 0;
   let a = 0;
@@ -41,51 +22,6 @@ function sumPair(rows: SubgroupRow[]): { p: number; a: number } {
     a += Number(r.actual_value);
   }
   return { p, a };
-}
-
-/** Agrupa linhas de equipamento por palavras-chave do subgrupo. */
-export function classifyEquip(sub: string): EqBucketKey {
-  const t = fold(sub);
-  if (isGenericEquipSubgroupNameFolded(t)) return "eq_generico";
-  if (t.includes("onibus") || t.includes("nibus")) return "onibus";
-  // No Excel aparece como "Munk" (sem N) e às vezes como "Munck".
-  if (t.includes("munck") || t.includes("munk")) return "munck";
-  if (t.includes("guindaste")) return "guindaste";
-  if (t.includes("container") || (t.includes("cont") && t.includes("iner")))
-    return "container";
-  if (t.includes("maq") && t.includes("pesad")) return "maquinas";
-  if (
-    t.includes("carro") ||
-    t.includes("leve") ||
-    t.includes("veiculo") ||
-    t.includes("veículo")
-  )
-    return "carros";
-  return "outros";
-}
-
-function classifyMat(sub: string):
-  | "ferramental"
-  | "consumiveis"
-  | "andaime"
-  | "cacamba"
-  | "outros" {
-  const t = fold(sub);
-  if (t.includes("ferramental")) return "ferramental";
-  if (t.includes("consumivel") || t.includes("consumi")) return "consumiveis";
-  if (t.includes("andaime")) return "andaime";
-  if (t.includes("cacamba") || t.includes("cancamba")) return "cacamba";
-  return "outros";
-}
-
-/** Classificação de Materiais por palavras-chave do subgrupo. */
-export function classifyMaterial(sub: string):
-  | "ferramental"
-  | "consumiveis"
-  | "andaime"
-  | "cacamba"
-  | "outros" {
-  return classifyMat(sub);
 }
 
 /** Soma prevista por grupo (para donut de distribuição). */
@@ -113,231 +49,113 @@ function sortBarsByPlannedDesc(bars: SubgroupChartBar[]): SubgroupChartBar[] {
   return [...bars].sort((a, b) => b.planned_value - a.planned_value);
 }
 
+/** Id estável e único por chave dobrada (evita colisão de slug e keys React duplicadas). */
+function barIdFromFolded(idPrefix: string, folded: string): string {
+  if (folded === "—") return `${idPrefix}-emdash`;
+  let h = 2166136261;
+  for (let i = 0; i < folded.length; i++) {
+    h ^= folded.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return `${idPrefix}-k${(h >>> 0).toString(16)}-${folded.length}`;
+}
+
 /**
- * Equipamento: buckets consolidados, ordenados do maior ao menor (previsto).
+ * Barras horizontais por subgrupo (nome normalizado), maior previsto primeiro.
+ * Usado para Equipamento, Materiais e Fornecimento.
+ */
+function buildHorizontalBarsForGroup(
+  rows: SubgroupRow[],
+  groupName: string,
+  idPrefix: string,
+  fullLabelPrefix: string,
+): SubgroupChartBar[] {
+  const filtered = rows.filter((r) => r.group_name === groupName);
+  const byFold = new Map<string, { planned: number; actual: number }>();
+  for (const r of filtered) {
+    const raw = (r.subgroup_name || "—").trim() || "—";
+    const folded = foldSubgroupKey(raw);
+    const cur = byFold.get(folded) ?? { planned: 0, actual: 0 };
+    cur.planned += Number(r.planned_value);
+    cur.actual += Number(r.actual_value);
+    byFold.set(folded, cur);
+  }
+  const bars: SubgroupChartBar[] = [];
+  for (const [folded, s] of byFold) {
+    const subName =
+      folded === "—" ? "—" : formatSubgroupLabelForDisplay(folded);
+    bars.push({
+      id: barIdFromFolded(idPrefix, folded),
+      label: subName.length > 26 ? `${subName.slice(0, 24)}…` : subName,
+      fullLabel: `${fullLabelPrefix} — ${subName}`,
+      planned_value: s.planned,
+      actual_value: s.actual,
+    });
+  }
+  return sortBarsByPlannedDesc(bars);
+}
+
+/**
+ * Equipamento: um par de barras por subgrupo (como Materiais), maior previsto primeiro.
  */
 export function buildEquipmentHorizontalSeries(
   rows: SubgroupRow[],
 ): SubgroupChartBar[] {
-  const eq = rows.filter((r) => r.group_name === "Equipamento");
-  const eqBuckets: Record<EqBucketKey, SubgroupRow[]> = {
-    onibus: [],
-    carros: [],
-    guindaste: [],
-    munck: [],
-    maquinas: [],
-    container: [],
-    eq_generico: [],
-    outros: [],
-  };
-  for (const r of eq) {
-    eqBuckets[classifyEquip(r.subgroup_name)].push(r);
-  }
-
-  const eqOrder: { key: EqBucketKey; label: string; full: string }[] = [
-    { key: "onibus", label: "Ônibus", full: "Equipamento — Ônibus" },
-    { key: "carros", label: "Carros Leve", full: "Equipamento — Carros leves" },
-    {
-      key: "maquinas",
-      label: "Máquinas Pesadas",
-      full: "Equipamento — Máquinas pesadas",
-    },
-    { key: "outros", label: "Outros", full: "Equipamento — Outros" },
-    { key: "container", label: "Contêiner", full: "Equipamento — Contêiner" },
-    { key: "munck", label: "Munck", full: "Equipamento — Munck" },
-    { key: "guindaste", label: "Guindaste", full: "Equipamento — Guindaste" },
-  ];
-
-  const bars = eqOrder.map((d) => {
-    const s = sumPair(eqBuckets[d.key]);
-    return {
-      id: `eq-h-${d.key}`,
-      label: d.label,
-      fullLabel: d.full,
-      planned_value: s.p,
-      actual_value: s.a,
-    };
-  });
-  return sortBarsByPlannedDesc(bars);
+  return buildHorizontalBarsForGroup(
+    rows,
+    "Equipamento",
+    "eq-h",
+    "Equipamento",
+  );
 }
 
-export type MatBucketKey =
-  | "ferramental"
-  | "consumiveis"
-  | "andaime"
-  | "cacamba"
-  | "outros";
-
 /**
- * Materiais: mesmos buckets do gráfico combinado, do maior ao menor (previsto).
+ * Materiais: um par de barras por subgrupo, maior previsto primeiro.
  */
 export function buildMaterialHorizontalSeries(
   rows: SubgroupRow[],
 ): SubgroupChartBar[] {
-  const mat = rows.filter((r) => r.group_name === "Materiais");
-  const matBuckets: Record<MatBucketKey, SubgroupRow[]> = {
-    ferramental: [],
-    consumiveis: [],
-    andaime: [],
-    cacamba: [],
-    outros: [],
-  };
-  for (const r of mat) {
-    matBuckets[classifyMat(r.subgroup_name)].push(r);
-  }
-
-  const matDefs: { key: MatBucketKey; label: string; full: string }[] = [
-    { key: "ferramental", label: "Ferramental", full: "Materiais — Ferramental" },
-    {
-      key: "consumiveis",
-      label: "Consumíveis",
-      full: "Materiais — Consumíveis",
-    },
-    { key: "andaime", label: "Andaime", full: "Materiais — Andaime" },
-    { key: "cacamba", label: "Caçamba", full: "Materiais — Caçamba" },
-    { key: "outros", label: "Outros", full: "Materiais — Outros" },
-  ];
-
-  const bars = matDefs.map((d) => {
-    const s = sumPair(matBuckets[d.key]);
-    return {
-      id: `mat-h-${d.key}`,
-      label: d.label,
-      fullLabel: d.full,
-      planned_value: s.p,
-      actual_value: s.a,
-    };
-  });
-  return sortBarsByPlannedDesc(bars);
+  return buildHorizontalBarsForGroup(rows, "Materiais", "mat-sg", "Materiais");
 }
 
 /**
- * Série fixa para o gráfico de custos por subgrupo:
- * Mão de Obra → Equipamento (buckets) → Materiais.
+ * Fornecimento: um par de barras por subgrupo, maior previsto primeiro.
+ */
+export function buildFornecimentoHorizontalSeries(
+  rows: SubgroupRow[],
+): SubgroupChartBar[] {
+  return buildHorizontalBarsForGroup(
+    rows,
+    "Fornecimento",
+    "for-h",
+    "Fornecimento",
+  );
+}
+
+/**
+ * Série combinada: Mão de Obra (total) + subgrupos de Equipamento, Materiais e Fornecimento.
  */
 export function buildSubgroupChartSeries(rows: SubgroupRow[]): SubgroupChartBar[] {
   const mo = rows.filter((r) => r.group_name === "Mão de Obra");
-  const eq = rows.filter((r) => r.group_name === "Equipamento");
-  const mat = rows.filter((r) => r.group_name === "Materiais");
-
-  const eqBuckets: Record<EqBucketKey, SubgroupRow[]> = {
-    onibus: [],
-    carros: [],
-    guindaste: [],
-    munck: [],
-    maquinas: [],
-    container: [],
-    eq_generico: [],
-    outros: [],
-  };
-  for (const r of eq) {
-    eqBuckets[classifyEquip(r.subgroup_name)].push(r);
-  }
-
-  const matBuckets: Record<
-    "ferramental" | "consumiveis" | "andaime" | "cacamba" | "outros",
-    SubgroupRow[]
-  > = {
-    ferramental: [],
-    consumiveis: [],
-    andaime: [],
-    cacamba: [],
-    outros: [],
-  };
-  for (const r of mat) {
-    matBuckets[classifyMat(r.subgroup_name)].push(r);
-  }
-
   const sMo = sumPair(mo);
-  const out: SubgroupChartBar[] = [
-    {
-      id: "mo",
-      label: "Mão de obra",
-      fullLabel: "Mão de Obra (total)",
-      planned_value: sMo.p,
-      actual_value: sMo.a,
-    },
-  ];
-
-  const eqDefs: {
-    key: EqBucketKey;
-    label: string;
-    full: string;
-  }[] = [
-    { key: "onibus", label: "Ônibus", full: "Equipamento — Ônibus" },
-    { key: "carros", label: "Carros Leve", full: "Equipamento — Carros leves" },
-    {
-      key: "maquinas",
-      label: "Máq. pesadas",
-      full: "Equipamento — Máquinas pesadas",
-    },
-    { key: "outros", label: "Outros (EQ)", full: "Equipamento — Outros" },
-    { key: "container", label: "Contêiner", full: "Equipamento — Contêiner" },
-    { key: "munck", label: "Munck", full: "Equipamento — Munck" },
-    { key: "guindaste", label: "Guindaste", full: "Equipamento — Guindaste" },
-  ];
-  for (const d of eqDefs) {
-    const s = sumPair(eqBuckets[d.key]);
-    out.push({
-      id: `eq-${d.key}`,
-      label: d.label,
-      fullLabel: d.full,
-      planned_value: s.p,
-      actual_value: s.a,
-    });
-  }
-
-  const matDefs: {
-    key: keyof typeof matBuckets;
-    label: string;
-    full: string;
-  }[] = [
-    { key: "ferramental", label: "Ferramental", full: "Materiais — Ferramental" },
-    {
-      key: "consumiveis",
-      label: "Consumíveis",
-      full: "Materiais — Consumíveis",
-    },
-    { key: "andaime", label: "Andaime", full: "Materiais — Andaime" },
-    { key: "cacamba", label: "Caçamba", full: "Materiais — Caçamba" },
-    { key: "outros", label: "Outros (MAT)", full: "Materiais — Outros" },
-  ];
-  for (const d of matDefs) {
-    const s = sumPair(matBuckets[d.key]);
-    out.push({
-      id: `mat-${d.key}`,
-      label: d.label,
-      fullLabel: d.full,
-      planned_value: s.p,
-      actual_value: s.a,
-    });
-  }
-
-  const fornRows = rows.filter((r) => r.group_name === "Fornecimento");
-  const byFornSub = new Map<string, SubgroupRow[]>();
-  for (const r of fornRows) {
-    const k = r.subgroup_name || "—";
-    const list = byFornSub.get(k);
-    if (list) list.push(r);
-    else byFornSub.set(k, [r]);
-  }
-  const fornSubs = [...byFornSub.entries()].sort(
-    (a, b) => sumPair(b[1]).p - sumPair(a[1]).p,
-  );
-  for (const [subName, subList] of fornSubs) {
-    const s = sumPair(subList);
-    const idSlug = fold(subName)
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "")
-      .slice(0, 28);
-    out.push({
-      id: `for-${idSlug || "sub"}`,
-      label: subName.length > 24 ? `${subName.slice(0, 22)}…` : subName,
-      fullLabel: `Fornecimento — ${subName}`,
-      planned_value: s.p,
-      actual_value: s.a,
-    });
-  }
-
-  return out;
+  const moBar: SubgroupChartBar = {
+    id: "mo",
+    label: "Mão de obra",
+    fullLabel: "Mão de Obra (total)",
+    planned_value: sMo.p,
+    actual_value: sMo.a,
+  };
+  const eqBars = buildEquipmentHorizontalSeries(rows).map((b) => ({
+    ...b,
+    id: b.id.replace(/^eq-h-/, "eq-"),
+  }));
+  const matBars = buildMaterialHorizontalSeries(rows).map((b) => ({
+    ...b,
+    id: b.id.replace(/^mat-sg-/, "mat-"),
+  }));
+  const forBars = buildFornecimentoHorizontalSeries(rows).map((b) => ({
+    ...b,
+    id: b.id.replace(/^for-h-/, "for-"),
+  }));
+  return [moBar, ...eqBars, ...matBars, ...forBars];
 }

@@ -4,6 +4,7 @@ import type { SubgroupChartBar } from "../../lib/dashboardSubgroupChartBuckets";
 import {
   buildCostDistributionQuad,
   buildEquipmentHorizontalSeries,
+  buildFornecimentoHorizontalSeries,
   buildMaterialHorizontalSeries,
 } from "../../lib/dashboardSubgroupChartBuckets";
 import { formatBRL, formatBRLAxis } from "../../lib/money";
@@ -238,7 +239,7 @@ function BarTrackCenterLabel({ value }: { value: number }) {
   );
 }
 
-type HorizontalBreakdownView = "equipment" | "material";
+type HorizontalBreakdownView = "equipment" | "material" | "fornecimento";
 
 function HorizontalCostBreakdownCard({
   rows,
@@ -265,7 +266,11 @@ function HorizontalCostBreakdownCard({
   }, [maxVal]);
 
   const title =
-    view === "equipment" ? "Custos por Equipamento" : "Custos por Material";
+    view === "equipment"
+      ? "Custos por Equipamento"
+      : view === "material"
+        ? "Custos por Material"
+        : "Custos por Fornecimento";
 
   return (
     <div className="flex h-full flex-col rounded-xl border border-(--border) bg-(--card) p-5 shadow-(--shadow-card)">
@@ -274,7 +279,7 @@ function HorizontalCostBreakdownCard({
           {title}
         </h2>
         <div
-          className="inline-flex shrink-0 rounded-lg border border-(--border) bg-black/25 p-0.5"
+          className="inline-flex max-w-full shrink-0 flex-wrap justify-end gap-0.5 rounded-lg border border-(--border) bg-black/25 p-0.5"
           role="group"
           aria-label="Alternar visão do gráfico"
         >
@@ -283,8 +288,8 @@ function HorizontalCostBreakdownCard({
             onClick={() => onViewChange("equipment")}
             className={
               view === "equipment"
-                ? "rounded-md bg-white/10 px-3 py-1 text-xs font-medium text-(--text) shadow-sm ring-1 ring-white/10"
-                : "rounded-md px-3 py-1 text-xs font-medium text-(--muted) transition hover:text-(--text)"
+                ? "rounded-md bg-white/10 px-2.5 py-1 text-[11px] font-medium text-(--text) shadow-sm ring-1 ring-white/10 sm:px-3 sm:text-xs"
+                : "rounded-md px-2.5 py-1 text-[11px] font-medium text-(--muted) transition hover:text-(--text) sm:px-3 sm:text-xs"
             }
           >
             Equipamento
@@ -294,11 +299,22 @@ function HorizontalCostBreakdownCard({
             onClick={() => onViewChange("material")}
             className={
               view === "material"
-                ? "rounded-md bg-white/10 px-3 py-1 text-xs font-medium text-(--text) shadow-sm ring-1 ring-white/10"
-                : "rounded-md px-3 py-1 text-xs font-medium text-(--muted) transition hover:text-(--text)"
+                ? "rounded-md bg-white/10 px-2.5 py-1 text-[11px] font-medium text-(--text) shadow-sm ring-1 ring-white/10 sm:px-3 sm:text-xs"
+                : "rounded-md px-2.5 py-1 text-[11px] font-medium text-(--muted) transition hover:text-(--text) sm:px-3 sm:text-xs"
             }
           >
             Material
+          </button>
+          <button
+            type="button"
+            onClick={() => onViewChange("fornecimento")}
+            className={
+              view === "fornecimento"
+                ? "rounded-md bg-white/10 px-2.5 py-1 text-[11px] font-medium text-(--text) shadow-sm ring-1 ring-white/10 sm:px-3 sm:text-xs"
+                : "rounded-md px-2.5 py-1 text-[11px] font-medium text-(--muted) transition hover:text-(--text) sm:px-3 sm:text-xs"
+            }
+          >
+            Fornecimento
           </button>
         </div>
       </div>
@@ -324,11 +340,13 @@ function HorizontalCostBreakdownCard({
           <p className="text-sm text-(--muted)">
             {view === "equipment"
               ? "Sem valores de equipamento para exibir."
-              : "Sem valores de materiais para exibir."}
+              : view === "material"
+                ? "Sem valores de materiais para exibir."
+                : "Sem valores de fornecimento para exibir."}
           </p>
         ) : (
           <>
-            <div className="mb-3 flex justify-between pl-29 text-[10px] tabular-nums text-(--muted) sm:text-xs">
+            <div className="mb-3 flex justify-between pl-24 text-[10px] tabular-nums text-(--muted) sm:pl-36 sm:text-xs">
               {ticks.map((v, i) => (
                 <span key={i} className="max-w-18 truncate text-right">
                   {formatBRLAxis(v)}
@@ -336,7 +354,7 @@ function HorizontalCostBreakdownCard({
               ))}
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4" key={view}>
               {rows.map((r) => {
                 const planned = Number(r.planned_value);
                 const actual = Number(r.actual_value);
@@ -344,11 +362,14 @@ function HorizontalCostBreakdownCard({
                 const wPlan = maxVal > 0 ? (planned / maxVal) * 100 : 0;
                 return (
                   <div
-                    key={r.id}
+                    key={`${view}-${r.id}`}
                     className="flex items-stretch gap-2 sm:gap-3"
                     title={`${r.fullLabel} — Prev: ${formatBRL(planned)} · Real: ${formatBRL(actual)}`}
                   >
-                    <div className="flex w-24 shrink-0 items-center justify-end text-right text-[11px] font-medium leading-tight text-(--text) sm:w-28 sm:text-xs">
+                    <div
+                      className="flex w-[5.5rem] shrink-0 items-center justify-end text-right text-[10px] font-medium leading-tight text-(--text) sm:w-32 sm:text-xs"
+                      title={r.fullLabel}
+                    >
                       {r.label}
                     </div>
                     <div className="relative min-w-0 flex-1">
@@ -432,8 +453,17 @@ export function DashboardCostCharts({ subgroups }: Props) {
     [subgroups],
   );
 
+  const fornecimentoRows = useMemo(
+    () => buildFornecimentoHorizontalSeries(subgroups),
+    [subgroups],
+  );
+
   const horizontalRows =
-    horizontalView === "equipment" ? equipRows : materialRows;
+    horizontalView === "equipment"
+      ? equipRows
+      : horizontalView === "material"
+        ? materialRows
+        : fornecimentoRows;
 
   const hasAny =
     dist.mo + dist.eq + dist.mat + dist.forn > 0 ||
@@ -441,6 +471,9 @@ export function DashboardCostCharts({ subgroups }: Props) {
       (r) => Number(r.actual_value) > 0 || Number(r.planned_value) > 0,
     ) ||
     materialRows.some(
+      (r) => Number(r.actual_value) > 0 || Number(r.planned_value) > 0,
+    ) ||
+    fornecimentoRows.some(
       (r) => Number(r.actual_value) > 0 || Number(r.planned_value) > 0,
     );
 

@@ -127,7 +127,6 @@ export function Layout() {
   const {
     isAdmin,
     loading,
-    signOut,
     session,
     displayName,
     setDisplayName,
@@ -189,76 +188,62 @@ export function Layout() {
         </nav>
         <div className="mt-auto border-t border-(--border) p-3">
           {showAdmin ? (
-            <div className="flex flex-col gap-2">
-              <div className="rounded-xl border border-(--border) bg-(--app-bg) px-3 py-2 text-xs">
-                <div className="font-medium text-(--text)">{adminLabel}</div>
-                {session?.user?.email ? (
-                  <div className="mt-0.5 truncate text-(--muted)" title={session.user.email}>
-                    {session.user.email}
-                  </div>
-                ) : null}
-                {nameOpen ? (
-                  <div className="mt-2 flex flex-col gap-1.5">
-                    <label className="text-[11px] text-(--muted)" htmlFor="admin-display-name">
-                      Nome no histórico
-                    </label>
-                    <input
-                      id="admin-display-name"
-                      type="text"
-                      value={nameDraft}
-                      onChange={(e) => setNameDraft(e.target.value)}
-                      placeholder="Ex.: João Silva"
-                      className="w-full rounded-lg border border-(--border) bg-(--card) px-2 py-1.5 text-sm text-(--text)"
+            <div className="rounded-xl border border-(--border) bg-(--app-bg) px-3 py-2.5 text-sm">
+              <div className="font-medium text-(--text)">{adminLabel}</div>
+              {nameOpen ? (
+                <div className="mt-2 flex flex-col gap-1.5">
+                  <label className="text-[11px] text-(--muted)" htmlFor="admin-display-name">
+                    Nome no histórico
+                  </label>
+                  <input
+                    id="admin-display-name"
+                    type="text"
+                    value={nameDraft}
+                    onChange={(e) => setNameDraft(e.target.value)}
+                    placeholder="Ex.: João Silva"
+                    className="w-full rounded-lg border border-(--border) bg-(--card) px-2 py-1.5 text-sm text-(--text)"
+                    disabled={nameSaving}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
                       disabled={nameSaving}
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        disabled={nameSaving}
-                        className="rounded-lg bg-(--accent) px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-50"
-                        onClick={() => {
-                          setNameSaving(true);
-                          void setDisplayName(nameDraft)
-                            .then(({ error }) => {
-                              if (!error) {
-                                setNameOpen(false);
-                                void refreshProfile();
-                              }
-                            })
-                            .finally(() => setNameSaving(false));
-                        }}
-                      >
-                        {nameSaving ? "A guardar…" : "Guardar"}
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-lg border border-(--border) px-2.5 py-1 text-[11px] text-(--muted)"
-                        onClick={() => setNameOpen(false)}
-                      >
-                        Cancelar
-                      </button>
-                    </div>
+                      className="rounded-lg bg-(--accent) px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-50"
+                      onClick={() => {
+                        setNameSaving(true);
+                        void setDisplayName(nameDraft)
+                          .then(({ error }) => {
+                            if (!error) {
+                              setNameOpen(false);
+                              void refreshProfile();
+                            }
+                          })
+                          .finally(() => setNameSaving(false));
+                      }}
+                    >
+                      {nameSaving ? "A guardar…" : "Guardar"}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-(--border) px-2.5 py-1 text-[11px] text-(--muted)"
+                      onClick={() => setNameOpen(false)}
+                    >
+                      Cancelar
+                    </button>
                   </div>
-                ) : (
-                  <button
-                    type="button"
-                    className="mt-2 text-left text-[11px] font-medium text-(--accent) hover:underline"
-                    onClick={() => {
-                      setNameDraft(displayName ?? "");
-                      setNameOpen(true);
-                    }}
-                  >
-                    Editar nome no histórico
-                  </button>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => void signOut()}
-                className={`${navItemBase} w-full text-left text-(--muted) hover:text-(--text)`}
-              >
-                Sair
-              </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="mt-2 text-left text-xs font-medium text-(--accent) hover:underline"
+                  onClick={() => {
+                    setNameDraft(displayName ?? "");
+                    setNameOpen(true);
+                  }}
+                >
+                  Editar nome
+                </button>
+              )}
             </div>
           ) : (
             <NavLink
