@@ -10,6 +10,14 @@ import {
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { T } from "../lib/db/catalog";
+import { isStandalone } from "../lib/presentationMode";
+import {
+  clearStandaloneStorage,
+  createStandaloneSession,
+  matchesDemoLogin,
+  readStandaloneStorage,
+  writeStandaloneStorage,
+} from "../lib/standaloneAuth";
 
 type ProfileRow = {
   role: string;
@@ -19,12 +27,11 @@ type ProfileRow = {
 type AuthContextValue = {
   session: Session | null;
   isAdmin: boolean;
-  /** Nome em app_profiles.display_name (histórico / UI). */
+  /** Nome em app_profiles.display_name (histórico / UI) ou em modo offline, localStorage. */
   displayName: string | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
-  /** Atualiza display_name do admin logado (RLS: própria linha). */
   setDisplayName: (name: string) => Promise<{ error: string | null }>;
   refreshProfile: () => Promise<void>;
 };
@@ -48,13 +55,41 @@ async function loadProfile(
   };
 }
 
+function initialStandaloneState(): {
+  session: Session | null;
+  isAdmin: boolean;
+  displayName: string | null;
+} {
+  if (!isStandalone()) {
+    return { session: null, isAdmin: false, displayName: null };
+  }
+  const s = readStandaloneStorage();
+  if (!s) {
+    return { session: null, isAdmin: false, displayName: null };
+  }
+  return {
+    session: createStandaloneSession(s.email),
+    isAdmin: true,
+    displayName: s.display_name,
+  };
+}
+
+const initS = initialStandaloneState();
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [displayName, setDisplayNameState] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState<Session | null>(initS.session);
+  const [isAdmin, setIsAdmin] = useState(initS.isAdmin);
+  const [displayName, setDisplayNameState] = useState<string | null>(
+    initS.displayName,
+  );
+  const [loading, setLoading] = useState(!isStandalone());
 
   const refreshProfile = useCallback(async () => {
+    if (isStandalone()) {
+      const s = readStandaloneStorage();
+      setDisplayNameState(s?.display_name ?? null);
+      return;
+    }
     const uid = (await supabase.auth.getSession()).data.session?.user?.id;
     const p = await loadProfile(uid);
     setIsAdmin(p.isAdmin);
@@ -68,6 +103,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (isStandalone()) {
+      return;
+    }
     let cancelled = false;
     void supabase.auth.getSession().then(({ data: { session: s } }) => {
       if (cancelled) return;
@@ -89,6 +127,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [applyUserId]);
 
   const signIn = useCallback(async (email: string, password: string) => {
+    if (isStandalone()) {
+      if (!matchesDemoLogin(email, password)) {
+        return { error: "E-mail ou senha incorretos (conta de demonstração)." };
+      }
+      const trimmed = email.trim();
+      const prev = readStandaloneStorage();
+      const next = {
+        email: trimmed,
+        display_name: prev?.email === trimmed ? prev.display_name : null,
+      };
+      writeStandaloneStorage(next);
+      setSession(createStandaloneSession(trimmed));
+      setIsAdmin(true);
+      setDisplayNameState(next.display_name);
+      return { error: null };
+    }
     const { error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
@@ -97,10 +151,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    if (isStandalone()) {
+      clearStandaloneStorage();
+      setSession(null);
+      setIsAdmin(false);
+      setDisplayNameState(null);
+      return;
+    }
     await supabase.auth.signOut();
   }, []);
 
   const setDisplayName = useCallback(async (name: string) => {
+    if (isStandalone()) {
+      const s = readStandaloneStorage();
+      if (!s) return { error: "Sessão inválida." };
+      const trimmed = name.trim();
+      writeStandaloneStorage({
+        email: s.email,
+        display_name: trimmed || null,
+      });
+      setDisplayNameState(trimmed || null);
+      return { error: null };
+    }
     const uid = (await supabase.auth.getSession()).data.session?.user?.id;
     if (!uid) return { error: "Sessão inválida." };
     const trimmed = name.trim();

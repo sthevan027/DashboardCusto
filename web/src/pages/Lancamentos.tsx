@@ -8,6 +8,8 @@ import {
   formatBRLDecimalField,
   parseBRLInput,
 } from "../lib/money";
+import { isStandalone } from "../lib/presentationMode";
+import { mockLancamentoItems, mockLancamentoRecent } from "../lib/presentationMockData";
 
 type Lookup = {
   item_id: number;
@@ -80,6 +82,14 @@ export function Lancamentos() {
   const [rateioPreviewOpen, setRateioPreviewOpen] = useState(false);
 
   const loadRecentEntries = useCallback(async () => {
+    if (isStandalone()) {
+      setRecentLoading(true);
+      setRecentEntries(
+        mockLancamentoRecent as unknown as RecentEntry[],
+      );
+      setRecentLoading(false);
+      return;
+    }
     setRecentLoading(true);
     const { data, error } = await supabase
       .from(T.cost_entries)
@@ -98,6 +108,11 @@ export function Lancamentos() {
   useEffect(() => {
     (async () => {
       setErr(null);
+      if (isStandalone()) {
+        setItems(mockLancamentoItems as unknown as Lookup[]);
+        setLoading(false);
+        return;
+      }
       const { data, error } = await supabase
         .from(V.cost_item_lookup)
         .select("*")
@@ -213,6 +228,11 @@ export function Lancamentos() {
     setErr(null);
     setFieldErrors({});
     setAmountBlurHint(null);
+
+    if (isStandalone()) {
+      setMsg("Modo demonstração: o lançamento não é gravado no banco.");
+      return;
+    }
 
     const amount = parseBRLInput(amountStr);
     const nextFieldErrors: Partial<Record<FieldKey, string>> = {};

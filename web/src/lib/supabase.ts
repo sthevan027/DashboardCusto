@@ -1,11 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
+import { isStandalone } from './presentationMode'
 
 const url = import.meta.env.VITE_SUPABASE_URL
 const anon = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-if (!url || !anon) {
+if (!isStandalone() && (!url || !anon)) {
   console.warn(
-    'Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no arquivo .env'
+    'Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no arquivo .env',
   )
 }
 

@@ -1,6 +1,8 @@
-# JL-DashboardCusto
+# Dashboard Custo
 
 Dashboard de custos (orçado × realizado) com frontend em React/Vite e backend em **Supabase** (PostgreSQL + PostgREST).
+
+**Modo padrão (offline):** sem variáveis de ambiente a app usa **dados simulados** e login de teste (`demo@dashboardcusto.local` / `demonstracao`, configurável em `VITE_DEMO_EMAIL` e `VITE_DEMO_PASSWORD`). Para **ligar o Supabase**, crie `web/.env` com `VITE_STANDALONE=0` e as chaves; veja `web/.env.example`.
 
 ## Estrutura do repositório
 

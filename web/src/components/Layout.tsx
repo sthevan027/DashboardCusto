@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { isStandalone } from "../lib/presentationMode";
 
 function IconDashboard({ className }: { className?: string }) {
   return (
@@ -88,8 +89,8 @@ function IconHistory({ className }: { className?: string }) {
 function BrandLogo({ className }: { className?: string }) {
   return (
     <img
-      src="/images.jpg"
-      alt=""
+      src="/logo-dashboard-custo.svg"
+      alt="Dashboard Custo"
       width={40}
       height={40}
       decoding="async"
@@ -124,6 +125,7 @@ const adminNav: {
 ];
 
 export function Layout() {
+  const navigate = useNavigate();
   const {
     isAdmin,
     loading,
@@ -131,6 +133,7 @@ export function Layout() {
     displayName,
     setDisplayName,
     refreshProfile,
+    signOut,
   } = useAuth();
   const showAdmin = !loading && isAdmin;
   const [nameOpen, setNameOpen] = useState(false);
@@ -148,10 +151,12 @@ export function Layout() {
           <BrandLogo />
           <div className="min-w-0 text-left">
             <div className="text-base font-semibold leading-tight tracking-tight text-(--text)">
-              Controle Operacional
+              Dashboard Custo
             </div>
             <div className="mt-1 text-xs leading-snug text-(--muted)">
-              Dashboard de custos da obra
+              {isStandalone()
+                ? "Apresentação · dados simulados"
+                : "Visão consolidada de custos"}
             </div>
           </div>
         </div>
@@ -244,6 +249,15 @@ export function Layout() {
                   Editar nome
                 </button>
               )}
+              <button
+                type="button"
+                className="mt-2 w-full rounded-lg border border-(--border) px-2 py-1.5 text-xs font-medium text-(--muted) transition-colors hover:bg-(--nav-hover) hover:text-(--text)"
+                onClick={() => {
+                  void signOut().then(() => navigate("/"));
+                }}
+              >
+                Sair
+              </button>
             </div>
           ) : (
             <NavLink
@@ -258,6 +272,18 @@ export function Layout() {
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col bg-(--app-bg)">
         <main className="mx-auto w-full max-w-400 flex-1 px-5 py-8 text-left sm:px-8 lg:px-10">
+          {isStandalone() && (
+            <div
+              role="status"
+              className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-(--text)"
+            >
+              <span className="font-medium">Modo demonstração</span>
+              <span className="text-(--muted)">
+                {" "}
+                — os valores são fictícios; gravação no banco fica desativada.
+              </span>
+            </div>
+          )}
           <Outlet />
         </main>
       </div>

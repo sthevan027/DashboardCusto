@@ -7,6 +7,11 @@ import { getErrorMessage } from "../lib/supabaseError";
 import { compareGroup, compareItemCode } from "../lib/sort";
 import { statusLabelPt } from "../lib/statusLabels";
 import { useAuth } from "../contexts/AuthContext";
+import { isStandalone } from "../lib/presentationMode";
+import {
+  mockVisualActivities,
+  mockVisualBreakdown,
+} from "../lib/presentationMockData";
 
 type Activity = {
   item_id: number;
@@ -35,7 +40,7 @@ type Breakdown = {
 
 export function Visual() {
   const { isAdmin } = useAuth();
-  const canEdit = isAdmin;
+  const canEdit = isAdmin && !isStandalone();
 
   const [activities, setActivities] = useState<Activity[]>([]);
   const [breakdown, setBreakdown] = useState<Breakdown[]>([]);
@@ -81,6 +86,15 @@ export function Visual() {
 
   const load = useCallback(async () => {
     setErr(null);
+    if (isStandalone()) {
+      setActivities(
+        (mockVisualActivities as Activity[]).sort((x, y) =>
+          compareItemCode(x.item_code, y.item_code),
+        ),
+      );
+      setBreakdown(mockVisualBreakdown as Breakdown[]);
+      return;
+    }
     const [a, b] = await Promise.all([
       supabase.from(V.cost_activity_analysis).select("*"),
       supabase.from(V.cost_visual_breakdown).select("*"),

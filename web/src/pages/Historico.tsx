@@ -3,6 +3,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
 import { T, V } from "../lib/db/catalog";
 import { formatBRL } from "../lib/money";
+import { isStandalone } from "../lib/presentationMode";
+import { mockHistoricoAudit } from "../lib/presentationMockData";
 
 function IconTrash({ className }: { className?: string }) {
   return (
@@ -54,6 +56,12 @@ async function fetchAuditRows(): Promise<{
   rows: EnrichedRow[];
   error: string | null;
 }> {
+  if (isStandalone()) {
+    return {
+      rows: mockHistoricoAudit as EnrichedRow[],
+      error: null,
+    };
+  }
   const { data, error } = await supabase
     .from(V.cost_audit_enriched)
     .select("*")
@@ -109,6 +117,10 @@ export function Historico() {
   }, []);
 
   async function handleRemoveAuditLine(r: EnrichedRow) {
+    if (isStandalone()) {
+      setErr("Modo demonstração: exclusão desativada.");
+      return;
+    }
     const hasLinkedEntry = r.cost_id != null && r.action !== "DELETE";
     if (
       !confirm(
@@ -163,6 +175,10 @@ export function Historico() {
   }
 
   async function handleClearAllAudit() {
+    if (isStandalone()) {
+      setErr("Modo demonstração: limpeza de histórico desativada.");
+      return;
+    }
     if (rows.length === 0) return;
 
     const linkedCostIds = [

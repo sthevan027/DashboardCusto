@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { isStandalone } from "../lib/presentationMode";
+import { getDemoCredentials } from "../lib/standaloneAuth";
 import { supabase } from "../lib/supabase";
 import { T } from "../lib/db/catalog";
 
@@ -53,10 +55,15 @@ export function Login() {
   const from =
     (loc.state as { from?: string } | undefined)?.from ?? "/lancamentos";
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState(() =>
+    isStandalone() ? getDemoCredentials().email : "",
+  );
+  const [password, setPassword] = useState(() =>
+    isStandalone() ? getDemoCredentials().password : "",
+  );
   const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   if (!loading && session && isAdmin) {
     return <Navigate to={from} replace />;
@@ -64,10 +71,17 @@ export function Login() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setLoginError(null);
     setPending(true);
     const { error } = await signIn(email, password);
     if (error) {
+      setLoginError(error);
       setPending(false);
+      return;
+    }
+    if (isStandalone()) {
+      setPending(false);
+      navigate(from, { replace: true });
       return;
     }
     const { data: userData, error: userErr } = await supabase.auth.getUser();
@@ -89,17 +103,34 @@ export function Login() {
     navigate(from, { replace: true });
   }
 
+  const { email: demoEmail, password: demoPassword } = getDemoCredentials();
+
   return (
     <div className="flex min-h-screen flex-col bg-(--app-bg) px-5 py-10">
       <div className="mx-auto w-full max-w-sm">
         <h1 className="text-xl font-semibold tracking-tight text-(--text)">
           Acesso administrativo
         </h1>
+        {isStandalone() && (
+          <p className="mt-3 text-sm text-(--muted)">
+            Modo demonstração (sem base de dados). Conta de teste:{" "}
+            <span className="font-mono text-(--text)">{demoEmail}</span> /{" "}
+            <span className="font-mono text-(--text)">{demoPassword}</span>
+          </p>
+        )}
 
         <form
           onSubmit={(e) => void onSubmit(e)}
           className="mt-8 space-y-4 rounded-xl border border-(--border) bg-(--card) p-6 shadow-(--shadow-card)"
         >
+          {loginError && (
+            <div
+              role="alert"
+              className="rounded-lg border border-red-500/35 bg-red-500/10 px-3 py-2 text-sm text-red-200"
+            >
+              {loginError}
+            </div>
+          )}
           <label className="block text-xs font-medium text-(--muted)">
             E-mail
             <input

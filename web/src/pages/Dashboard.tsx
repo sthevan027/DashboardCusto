@@ -12,8 +12,13 @@ import {
   type TemporalForecastPlanned,
 } from "../components/dashboard/DashboardTemporalCostChart";
 import { V } from "../lib/db/catalog";
+import { isStandalone } from "../lib/presentationMode";
+import {
+  mockDashboardGroups,
+  mockDashboardSubgroups,
+} from "../lib/presentationMockData";
 
-const CONTRACT_LABEL =
+const contractLabelBase =
   (import.meta.env.VITE_CONTRACT_LABEL as string | undefined)?.trim() ||
   "Contrato";
 
@@ -114,23 +119,29 @@ export function Dashboard() {
   });
 
   useEffect(() => {
+    if (isStandalone()) {
+      setLoadError(null);
+      setGroups(mockDashboardGroups);
+      setSubgroups(mockDashboardSubgroups);
+      setLoadedAt(new Date());
+      setLoading(false);
+      return;
+    }
     let ok = true;
     (async () => {
       setLoadError(null);
       setLoading(true);
       try {
-        const [g, sg, a] = await Promise.all([
+        const [g, sg] = await Promise.all([
           supabase.from(V.cost_group_summary).select("*").order("group_name"),
           supabase
             .from(V.cost_subgroup_summary)
             .select("*")
             .order("group_name")
             .order("subgroup_name"),
-          supabase.from(V.cost_activity_analysis).select("*"),
         ]);
         if (g.error) throw g.error;
         if (sg.error) throw sg.error;
-        if (a.error) throw a.error;
         if (!ok) return;
         setGroups((g.data ?? []) as GroupRow[]);
         setSubgroups((sg.data ?? []) as SubgroupRow[]);
@@ -398,6 +409,10 @@ export function Dashboard() {
   const pctOfPlanned = (part: number) =>
     totalsKpi.planned > 0 ? (part / totalsKpi.planned) * 100 : null;
 
+  const contractLine = isStandalone()
+    ? "Dados de demonstração"
+    : contractLabelBase;
+
   return (
     <div className="space-y-8">
       {loadError && (
@@ -412,10 +427,10 @@ export function Dashboard() {
         <div className="flex items-start gap-4">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-(--text)">
-              Controle Operacional
+              Dashboard Custo
             </h1>
             <p className="mt-1 text-sm text-(--muted)">
-              Dashboard de custos da obra · {CONTRACT_LABEL}
+              {contractLine}
             </p>
           </div>
         </div>
