@@ -119,15 +119,17 @@ export function Dashboard() {
   });
 
   useEffect(() => {
-    if (isStandalone()) {
-      setLoadError(null);
-      setGroups(mockDashboardGroups);
-      setSubgroups(mockDashboardSubgroups);
-      setLoadedAt(new Date());
-      setLoading(false);
-      return;
-    }
     let ok = true;
+    if (isStandalone()) {
+      (async () => {
+        setLoadError(null);
+        setGroups(mockDashboardGroups);
+        setSubgroups(mockDashboardSubgroups);
+        setLoadedAt(new Date());
+        setLoading(false);
+      })();
+      return () => { ok = false; };
+    }
     (async () => {
       setLoadError(null);
       setLoading(true);
@@ -155,7 +157,7 @@ export function Dashboard() {
     return () => {
       ok = false;
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const id = window.setInterval(() => setNowTick(new Date()), 1000);

@@ -1,0 +1,9 @@
+{
+  "name": "dashboardcusto",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "cd web && yarn install && yarn build",
+    "start": "cd web && yarn preview --host 0.0.0.0 --port ${PORT:-4173}"
+  }
+}
