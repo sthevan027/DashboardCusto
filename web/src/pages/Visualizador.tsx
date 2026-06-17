@@ -384,6 +384,7 @@ function InlineMoney({
   const [val, setVal] = useState(() => formatBRL(defaultValue));
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setVal(formatBRL(defaultValue));
   }, [defaultValue]);
 
